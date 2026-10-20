@@ -1,0 +1,59 @@
+"""The feeds use RRULE/EXDATE/RDATE; check that an independent iCalendar
+implementation expands them to exactly the windows our own expander computes."""
+import unittest
+from datetime import date, datetime, timedelta, timezone
+
+from parkcal import ics
+from parkcal.cities import sf
+from parkcal.expand import windows
+
+from .test_sf import SIDES
+
+try:
+    import icalendar
+    import recurring_ical_events
+except ImportError:  # dev-only dependencies; runtime is stdlib
+    icalendar = None
+
+FIRST, LAST = date(2026, 10, 19), date(2027, 10, 19)
+STAMP = datetime(2026, 10, 19, tzinfo=timezone.utc)
+
+
+def merged(spans):
+    out = []
+    for s, e in sorted(spans):
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
+
+
+class Format(unittest.TestCase):
+    def test_lines_are_crlf_and_folded(self):
+        for side in SIDES.values():
+            text = ics.calendar(side, sf.CITY, FIRST, LAST, STAMP)
+            self.assertTrue(text.endswith("\r\n"))
+            for line in text.split("\r\n"):
+                self.assertLessEqual(len(line.encode()), 75, line)
+
+    def test_escape(self):
+        self.assertEqual(ics.escape("a,b;c\\d\ne"), "a\\,b\\;c\\\\d\\ne")
+
+
+@unittest.skipIf(icalendar is None, "pip install icalendar recurring-ical-events")
+class CrossCheck(unittest.TestCase):
+    def test_feeds_expand_to_expected_windows(self):
+        checked = 0
+        for side in SIDES.values():
+            feed = icalendar.Calendar.from_ical(ics.calendar(side, sf.CITY, FIRST, LAST, STAMP))
+            events = recurring_ical_events.of(feed).between(FIRST, LAST + timedelta(days=1))
+            got = merged((e["DTSTART"].dt, e["DTEND"].dt) for e in events)
+            want = [(w.start, w.end) for w in windows(side, sf.CITY, FIRST, LAST)]
+            self.assertEqual(got, want, side.id)
+            checked += len(want)
+        self.assertGreater(checked, 1000)
+
+
+if __name__ == "__main__":
+    unittest.main()

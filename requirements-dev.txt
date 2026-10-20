@@ -1,0 +1,4 @@
+# Runtime is stdlib-only (Python 3.9+). These are for the test suite.
+pytest
+icalendar
+recurring-ical-events
