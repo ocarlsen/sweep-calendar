@@ -14,11 +14,11 @@ page we can no longer parse, which is itself worth a look.
 import html
 import re
 import sys
-import urllib.request
 from datetime import date
 from typing import Dict, List, Tuple
 
 from .cities import sf
+from .fetch import get
 from .model import HolidayKind
 
 SFMTA_URL = "https://www.sfmta.com/getting-around/drive-park/holiday-enforcement-schedule"
@@ -66,9 +66,7 @@ def compare(published: Dict[date, Tuple[str, HolidayKind]]) -> List[str]:
 
 
 def main() -> int:
-    req = urllib.request.Request(SFMTA_URL, headers={"User-Agent": "sweep-calendar canary (parking.ocarlsen.com)"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        published = parse_sfmta(r.read().decode("utf-8", "replace"))
+    published = parse_sfmta(get(SFMTA_URL, timeout=60).decode("utf-8", "replace"))
     problems = compare(published)
     if problems:
         print("SFMTA holiday canary FAILED:\n  " + "\n  ".join(problems), file=sys.stderr)

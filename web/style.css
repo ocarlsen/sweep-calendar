@@ -4,10 +4,10 @@
   --ink: #1c1b19;
   --muted: #6b675f;
   --line: #e2ded5;
-  --accent: #244477;      /* the icon's navy */
+  --accent: #2f6fe0;      /* the icon's #3478f6, a step deeper so white text reaches 4.5:1 */
   --accent-ink: #ffffff;
-  --side: #6f95cf;
-  --side-hi: #1b3560;
+  --side: #7fa8f0;
+  --side-hi: #1f56c4;
   --warn: #b45309;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(0 0 0 / .06), 0 4px 16px rgb(0 0 0 / .05);
@@ -20,9 +20,9 @@
     --ink: #ece9e2;
     --muted: #a19c92;
     --line: #34322e;
-    --accent: #7ea6e6;
-    --accent-ink: #0b1a33;
-    --side: #4f74ad;
+    --accent: #6ea2ff;
+    --accent-ink: #08162e;
+    --side: #3f6fc2;
     --side-hi: #b9d3ff;
     --warn: #f59e0b;
     --shadow: none;
@@ -31,8 +31,8 @@
 }
 :root[data-theme="dark"] {
   --bg: #141412; --surface: #1e1d1b; --ink: #ece9e2; --muted: #a19c92;
-  --line: #34322e; --accent: #7ea6e6; --accent-ink: #0b1a33;
-  --side: #4f74ad; --side-hi: #b9d3ff; --warn: #f59e0b; --shadow: none; color-scheme: dark;
+  --line: #34322e; --accent: #6ea2ff; --accent-ink: #08162e;
+  --side: #3f6fc2; --side-hi: #b9d3ff; --warn: #f59e0b; --shadow: none; color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -161,6 +161,13 @@ button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visi
 .detail li:last-child { border-bottom: 0; }
 .actions { display: grid; gap: 8px; margin-top: 18px; }
 .actions .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions .row > * { padding: 10px 8px; white-space: nowrap; font-size: .92rem; }
+@media (max-width: 380px) { .actions .row { grid-template-columns: 1fr; } }
+.manual-copy {
+  width: 100%; font: inherit; font-size: .85rem; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
+.notice.inapp { margin-top: 14px; padding: 10px 12px; color: var(--ink); font-size: .9rem; }
 .hint { color: var(--muted); font-size: .82rem; margin: 10px 0 0; }
 .back { background: none; color: var(--muted); padding: 0; font-weight: 400; margin-bottom: 10px; }
 

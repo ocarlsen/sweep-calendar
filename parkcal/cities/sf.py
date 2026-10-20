@@ -16,11 +16,11 @@ is what the `holidays` flag marks.
 """
 import json
 import math
-import urllib.request
 from datetime import date, time, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
+from ..fetch import get
 from ..holidays import last_weekday, nth_weekday, observed
 from ..model import BlockSide, City, HolidayKind, Rule
 
@@ -57,8 +57,7 @@ def holidays(year: int) -> Dict[date, HolidayKind]:
 def fetch(cache: Optional[Path] = None) -> List[dict]:
     if cache and cache.exists():
         return json.loads(cache.read_text())
-    with urllib.request.urlopen(f"{DATASET}?$limit=1000000", timeout=120) as r:
-        raw = r.read()
+    raw = get(f"{DATASET}?$limit=1000000")
     rows = json.loads(raw)
     if cache:
         cache.parent.mkdir(parents=True, exist_ok=True)

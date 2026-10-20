@@ -154,6 +154,11 @@ function fmtWindow([start, end]) {
   return `${day}, ${hr(s)}–${hr(e)}`;
 }
 
+// The page URL that opens straight to this block (also what deep links use).
+function blockLink(s) {
+  return new URL(`#${state.city.slug}/${tileOf(s)}/${s.id}`, location.href.split("#")[0]).href;
+}
+
 function feedPath(s) { return `${state.city.slug}/feeds/${s.id}.ics`; }
 
 function feedURL(s, scheme) {
@@ -187,13 +192,83 @@ function select(s, { fly = false } = {}) {
   showDetail(s);
 }
 
+// webcal:// opens Apple Calendar on Apple devices and Outlook on Windows when
+// it's installed, and nothing on Android or ChromeOS, so the main button
+// depends on where the page is opened.
+function platform() {
+  const ua = navigator.userAgent;
+  if (/Android|CrOS/i.test(ua)) return "android";
+  if (/iPhone|iPad|iPod|Macintosh/i.test(ua)) return "apple";  // iPadOS reports Macintosh
+  return "other";
+}
+
+const HINTS = {
+  apple: "Subscribe opens Calendar. iOS hides alerts on subscribed calendars by default; turn off " +
+         "Remove Alerts in the subscription's settings to get a reminder the day before.",
+  android: "Google Calendar adds it to your Google account, so it shows up on this phone. " +
+           "For other calendar apps, tap Copy calendar URL, then add a calendar from a URL.",
+  other: "Google Calendar adds it to your Google account. Outlook: Subscribe opens it if it's " +
+         "installed, or Copy calendar URL and add a calendar from the internet.",
+};
+
+function calendarButtons(s, copy) {
+  const google = (cls) => el("a", { class: cls, target: "_blank", rel: "noopener",
+    href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feedURL(s, "webcal"))}` },
+    "Google Calendar");
+  const subscribe = (cls) => el("a", { class: cls, href: feedURL(s, "webcal") }, "Subscribe in Calendar");
+  switch (platform()) {
+    case "apple": return [subscribe("btn"), el("div", { class: "row" }, google("btn ghost"), copy)];
+    case "android": return [google("btn"), copy];
+    default: return [google("btn"), el("div", { class: "row" }, subscribe("btn ghost"), copy)];
+  }
+}
+
+// A ghost button that copies text and briefly says so. Clipboard access is
+// missing on plain http and refused in some in-app browsers; then the URL is
+// shown in a selected text box so it can still be copied by hand.
+function copyButton(label, text) {
+  const b = el("button", { type: "button", class: "ghost", "aria-live": "polite", on: { click: async () => {
+    try {
+      await navigator.clipboard.writeText(text());
+      b.textContent = "Copied";
+      setTimeout(() => (b.textContent = label), 1500);
+    } catch (err) {
+      b.textContent = "Couldn't copy: select it below";
+      manualCopy(b, text());
+    }
+  } } }, label);
+  return b;
+}
+
+function manualCopy(after, value) {
+  let box = after.parentElement.querySelector(".manual-copy");
+  if (!box) {
+    box = el("input", { class: "manual-copy", readonly: "", "aria-label": "URL to copy" });
+    after.closest(".actions").append(box);
+  }
+  box.value = value;
+  box.focus();
+  box.select();
+}
+
+// "Share this block": the phone's share sheet where there is one, else copy.
+function shareButton(s) {
+  if (!navigator.share) return copyButton("Copy page link", () => blockLink(s));
+  return el("button", { type: "button", class: "ghost", on: { click: () =>
+    navigator.share({ title: `${s.street} street sweeping`, url: blockLink(s) }).catch(() => {}) } },
+    "Share this block");
+}
+
+// LinkedIn, X, Facebook and Instagram open links in their own browser, which
+// usually can't hand webcal:// to a calendar or sign in to Google.
+function inAppBrowser() {
+  return /LinkedInApp|Twitter|FBAN|FBAV|Instagram|; wv\)/i.test(navigator.userAgent);
+}
+
 function showDetail(s) {
   const d = $("detail");
-  const copy = el("button", { type: "button", class: "ghost", on: { click: async () => {
-    await navigator.clipboard.writeText(feedURL(s, "https"));
-    copy.textContent = "Copied";
-    setTimeout(() => (copy.textContent = "Copy link"), 1500);
-  } } }, "Copy link");
+  const copy = copyButton("Copy calendar URL", () => feedURL(s, "https"));
+  const share = shareButton(s);
   d.replaceChildren(
     $("nearby").childElementCount ? el("button", { type: "button", class: "back", on: { click: showNearby } }, "‹ Nearby block sides") : "",
     el("h2", {}, s.street),
@@ -203,17 +278,12 @@ function showDetail(s) {
     el("ul", {}, ...s.schedule.map((t) => el("li", {}, t))),
     el("h3", {}, "Next sweeps"),
     el("ul", {}, ...(s.next.length ? s.next.map((w) => el("li", {}, fmtWindow(w))) : [el("li", {}, "None in the next two months")])),
-    el("div", { class: "actions" },
-      el("a", { class: "btn", href: feedURL(s, "webcal") }, "Subscribe in Calendar"),
-      el("div", { class: "row" },
-        el("a", { class: "btn ghost", href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feedURL(s, "webcal"))}`, target: "_blank", rel: "noopener" }, "Google Calendar"),
-        copy)),
+    inAppBrowser() ? el("p", { class: "notice warn inapp" },
+      "To subscribe, open this page in Safari or Chrome: tap the ⋯ menu, then Open in browser.") : "",
+    el("div", { class: "actions" }, ...calendarButtons(s, copy), share),
     s.advisory ? el("p", { class: "hint" },
       "This block isn't posted, so there are no tickets, but the city asks you to move your car so the curb gets swept.") : "",
-    el("p", { class: "hint" },
-      "iPhone: Subscribe opens Calendar. iOS hides alerts on subscribed calendars by default; turn off ",
-      "Remove Alerts in the subscription's settings to get a reminder the day before. ",
-      "Android: tap Google Calendar. Outlook and others: Copy link, then add a calendar from the internet."),
+    el("p", { class: "hint" }, HINTS[platform()]),
     el("p", { class: "hint" },
       "Sign says something different? ",
       el("a", { href: problemURL(s), target: "_blank", rel: "noopener" }, "Report a problem")),
@@ -229,9 +299,25 @@ function showNearby() {
   $("nearby").hidden = false;
 }
 
-async function nearbyFrom(lat, lon, label) {
+// What the search pin says on hover: the geocoder's street address when it
+// has one ("1000 Valencia Street, San Francisco"), else what was searched.
+function pinLabel(hit, label) {
+  const a = (hit && hit.address) || {};
+  const street = [a.house_number, a.road].filter(Boolean).join(" ");
+  const place = placeName(hit);
+  if (street) return place ? `${street}, ${place}` : street;
+  return label === "you" ? "You are here" : label;
+}
+
+function dropPin(lat, lon, style, text) {
   if (pin) pin.remove();
-  pin = L.circleMarker([lat, lon], { radius: 7, color: cssVar("--accent"), fillOpacity: 1 }).addTo(map);
+  pin = L.circleMarker([lat, lon], style).addTo(map);
+  if (text) pin.bindTooltip(text, { direction: "top", offset: [0, -8] });
+}
+
+async function nearbyFrom(lat, lon, label, hit) {
+  if (pin) pin.remove();
+  dropPin(lat, lon, { radius: 7, color: cssVar("--accent"), fillOpacity: 1 }, pinLabel(hit, label));
   map.setView([lat, lon], 18);
   const pt = [lon, lat];
   const keys = tileKeysAround(L.latLngBounds([lat, lon], [lat, lon]), 1);
@@ -313,7 +399,7 @@ function requestURL(place) {
 // A schedule that disagrees with the curb becomes a public, prefilled issue
 // carrying everything needed to find the block; no personal data.
 function problemURL(s) {
-  const page = new URL(`#${state.city.slug}/${tileOf(s)}/${s.id}`, location.href.split("#")[0]).href;
+  const page = blockLink(s);
   const title = `Schedule problem: ${s.street}, ${s.limits} (${s.side}), ${state.city.name}`;
   const body = [
     `Block: ${s.street}, ${s.limits}, ${s.side} (${state.city.slug}/${s.id})`,
@@ -358,9 +444,9 @@ function placeName(hit) {
   return a.city || a.town || a.village || a.hamlet || a.suburb || a.county || "";
 }
 
-function showOutside(lat, lon, where, place) {
-  if (pin) pin.remove();
-  pin = L.circleMarker([lat, lon], { radius: 8, color: cssVar("--muted"), fillColor: cssVar("--muted"), fillOpacity: 0.9 }).addTo(map);
+function showOutside(lat, lon, where, place, hit) {
+  dropPin(lat, lon, { radius: 8, color: cssVar("--muted"), fillColor: cssVar("--muted"), fillOpacity: 0.9 },
+          pinLabel(hit, place || "This address"));
   map.setView([lat, lon], 14);
   const title = where.d < JUST_OUTSIDE_M
     ? `${place ? `That's in ${place}, j` : "J"}ust outside ${where.city.name}.`
@@ -379,8 +465,8 @@ async function arrive(lat, lon, label, hit, { quiet = false } = {}) {
   if (quiet && !where.inside) return;  // auto-locate: never greet a visitor with "not covered"
   if (!where.inside) {
     // Within a few blocks of the edge, real block sides beat a polygon test.
-    if (where.d < NEAR_SIDE_M && where.city.slug === state.city.slug) return nearbyFrom(lat, lon, label);
-    return showOutside(lat, lon, where, placeName(hit));
+    if (where.d < NEAR_SIDE_M && where.city.slug === state.city.slug) return nearbyFrom(lat, lon, label, hit);
+    return showOutside(lat, lon, where, placeName(hit), hit);
   }
   if (where.city.slug !== state.city.slug) {
     await openCity(where.city.slug, { fit: false });
@@ -388,7 +474,7 @@ async function arrive(lat, lon, label, hit, { quiet = false } = {}) {
   } else {
     clearNotice();
   }
-  await nearbyFrom(lat, lon, label);
+  await nearbyFrom(lat, lon, label, hit);
 }
 
 // ---- search ----------------------------------------------------------------

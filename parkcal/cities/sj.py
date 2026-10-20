@@ -26,11 +26,11 @@ holiday field, so the feeds say so rather than guess a shifted date.
 import json
 import re
 import urllib.parse
-import urllib.request
 from datetime import date, time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from ..fetch import get
 from ..model import BlockSide, City, HolidayKind, Rule
 
 LAYER = "https://geo.sanjoseca.gov/server/rest/services/OPN/OPN_OpenDataService/MapServer/515"
@@ -55,8 +55,7 @@ def fetch(cache: Optional[Path] = None) -> List[dict]:
         q = urllib.parse.urlencode(dict(
             where="1=1", outFields="*", outSR=4326, f="geojson", orderByFields="OBJECTID",
             resultOffset=offset, resultRecordCount=PAGE))
-        with urllib.request.urlopen(f"{LAYER}/query?{q}", timeout=120) as r:
-            page = json.load(r)["features"]
+        page = json.loads(get(f"{LAYER}/query?{q}"))["features"]
         feats += page
         if len(page) < PAGE:
             break
