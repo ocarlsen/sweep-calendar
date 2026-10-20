@@ -211,8 +211,12 @@ function showDetail(s) {
     s.advisory ? el("p", { class: "hint" },
       "This block isn't posted, so there are no tickets, but the city asks you to move your car so the curb gets swept.") : "",
     el("p", { class: "hint" },
-      "On iPhone, Subscribe opens Calendar directly. iOS hides alerts on subscribed calendars by default; ",
-      "turn off Remove Alerts in the subscription's settings to get a reminder the day before."),
+      "iPhone: Subscribe opens Calendar. iOS hides alerts on subscribed calendars by default; turn off ",
+      "Remove Alerts in the subscription's settings to get a reminder the day before. ",
+      "Android: tap Google Calendar. Outlook and others: Copy link, then add a calendar from the internet."),
+    el("p", { class: "hint" },
+      "Sign says something different? ",
+      el("a", { href: problemURL(s), target: "_blank", rel: "noopener" }, "Report a problem")),
   );
   $("intro").hidden = true;
   $("nearby").hidden = true;
@@ -304,6 +308,22 @@ function requestURL(place) {
   const body = `I'd use Sweep Calendar in ${place || "[your city]"}.\n\n` +
     "(Please don't post your home address here; issues are public.)";
   return `${REPO}/issues/new?${new URLSearchParams({ title, body, labels: "city-request" })}`;
+}
+
+// A schedule that disagrees with the curb becomes a public, prefilled issue
+// carrying everything needed to find the block; no personal data.
+function problemURL(s) {
+  const page = new URL(`#${state.city.slug}/${tileOf(s)}/${s.id}`, location.href.split("#")[0]).href;
+  const title = `Schedule problem: ${s.street}, ${s.limits} (${s.side}), ${state.city.name}`;
+  const body = [
+    `Block: ${s.street}, ${s.limits}, ${s.side} (${state.city.slug}/${s.id})`,
+    `Shown on the site: ${s.schedule.join("; ")}`,
+    `Link: ${page}`,
+    "",
+    "What does the posted sign say? (A photo of the sign helps.)",
+    "",
+  ].join("\n");
+  return `${REPO}/issues/new?${new URLSearchParams({ title, body, labels: "data-problem" })}`;
 }
 
 function cityButtons(prefix = "") {
@@ -442,13 +462,23 @@ function drawOutlines() {
   }
 }
 
+const REQUEST = "__request__";
+
+// A plain <select> scales past a handful of cities and is native on phones.
+// Its last option opens the city-request issue and snaps back.
 function renderPicker() {
-  $("cities").replaceChildren(
-    ...state.cities.map((c) => el("button", {
-      type: "button", class: "city", "aria-pressed": String(c.slug === state.city.slug),
-      on: { click: () => goToCity(c.slug) },
-    }, c.name)),
-    el("a", { class: "city add", href: requestURL(""), target: "_blank", rel: "noopener" }, "+ Request a city"));
+  const pick = el("select", { id: "city", "aria-label": "City", on: { change: () => {
+    if (pick.value === REQUEST) {
+      window.open(requestURL(""), "_blank", "noopener");
+      pick.value = state.city.slug;
+    } else {
+      goToCity(pick.value);
+    }
+  } } },
+    ...state.cities.map((c) => el("option", { value: c.slug }, c.name)),
+    el("option", { value: REQUEST }, "Request a city…"));
+  pick.value = state.city.slug;
+  $("cities").replaceChildren(el("label", { for: "city", class: "city-label" }, "Sweeping schedules for"), pick);
 }
 
 async function goToCity(slug) {

@@ -11,6 +11,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  issues: write
 
 concurrency:
   group: pages
@@ -26,6 +27,8 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
+      # Fails on partial or malformed city data (build.check_sanity), so the
+      # last good deploy stays live.
       - run: python -m parkcal.build --out site
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -40,3 +43,35 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Checks against sources we don't control. Doesn't gate the deploy: a
+  # disagreement needs a human, and holding last week's feeds fixes nothing.
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m parkcal.canary
+
+  # Any failure above opens (or comments on) one issue, which emails the
+  # repo owner. Quiet when everything passes.
+  alert:
+    needs: [build, deploy, canary]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list -R "$GITHUB_REPOSITORY" --label canary --state open --json number --jq '.[0].number')
+          msg="Run failed (${{ github.event_name }}): $RUN"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body "$msg"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --label canary \
+              --title "Build or canary failed" \
+              --body "$msg"$'\n\n'"The live site still serves the last good deploy. Close this once fixed."
+          fi

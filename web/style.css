@@ -63,14 +63,12 @@ h1 { font-size: 1.2rem; letter-spacing: -.01em; }
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   max-width: 1200px; margin: 0 auto 12px; padding: 0 16px;
 }
-.city {
-  font: inherit; font-size: .9rem; font-weight: 600; border-radius: 999px; padding: 6px 14px;
-  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
-  text-decoration: none; cursor: pointer;
+.city-label { color: var(--muted); font-size: .9rem; }
+#city {
+  font: inherit; font-weight: 600; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
 }
-.city[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.city.add { color: var(--muted); font-weight: 400; border-style: dashed; }
-.city.add:hover { color: var(--ink); border-color: var(--accent); }
+.hint a { color: inherit; }
 
 .notice {
   position: relative; margin: 0 0 12px; padding: 14px 40px 14px 16px;

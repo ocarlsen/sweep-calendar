@@ -70,3 +70,7 @@ class City:
     # Appended to every event's description, e.g. a holiday caveat the data
     # cannot express.
     feed_note: str = ""
+    # Build sanity floor (see build.check_sanity): fewer block sides than this
+    # means the source returned partial data, so the build fails and the last
+    # good deploy stays live. Set ~10% under the count when the city was added.
+    min_block_sides: int = 0

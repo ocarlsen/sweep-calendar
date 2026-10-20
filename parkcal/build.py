@@ -68,15 +68,41 @@ def summary(side: BlockSide, upcoming: List[Window]) -> dict:
     }
 
 
+MAX_MISSING_LINE = 0.01  # share of block sides allowed without map geometry
+
+
+class DataError(SystemExit):
+    """A city's source data looks broken; fail the build, keep the live site."""
+
+
+def check_sanity(city: City, sides: List[BlockSide]) -> None:
+    """Refuse to publish partial or malformed data. Every check names the
+    knob, the value seen, and why, so a failed Monday run says what to look at."""
+    problems = []
+    if len(sides) < city.min_block_sides:
+        problems.append(f"{len(sides)} block sides < min_block_sides={city.min_block_sides} "
+                        "(source returned partial data?)")
+    no_rules = [s.id for s in sides if not s.rules]
+    if no_rules:
+        problems.append(f"{len(no_rules)} block sides with no schedule, e.g. {no_rules[:3]}")
+    no_line = sum(1 for s in sides if not s.line)
+    if sides and no_line / len(sides) > MAX_MISSING_LINE:
+        problems.append(f"{no_line}/{len(sides)} block sides without geometry "
+                        f"> MAX_MISSING_LINE={MAX_MISSING_LINE:.0%} (schema change?)")
+    if problems:
+        raise DataError(f"{city.slug}: refusing to publish:\n  " + "\n  ".join(problems))
+
+
 def build_city(city: City, out: Path, days: int, cache: Path = None) -> dict:
+    sides = join_split_blocks(
+        city.load(cache / f"{city.slug}.json" if cache else None), city.minor_street)
+    check_sanity(city, sides)
+
     root = out / city.slug
     if root.exists():
         shutil.rmtree(root)
     (root / "feeds").mkdir(parents=True)
     (root / "tiles").mkdir()
-
-    sides = join_split_blocks(
-        city.load(cache / f"{city.slug}.json" if cache else None), city.minor_street)
     today = datetime.now(timezone.utc).astimezone().date()
     last = today + timedelta(days=days)
     holidays = holiday_table(city, today, last)

@@ -155,6 +155,7 @@ CITY = City(
     holidays=holidays,
     load=load,
     boundary=Path(__file__).parent / "boundaries" / "sj.geojson",
+    min_block_sides=17_000,  # 18,615 on 2026-10-19
     feed_note=("In weeks with New Year's Day, Thanksgiving or Christmas, "
                "residential sweeping can run one day later."),
 )

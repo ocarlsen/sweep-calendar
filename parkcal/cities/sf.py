@@ -155,4 +155,5 @@ CITY = City(
     load=load,
     minor_street=minor_street,
     boundary=Path(__file__).parent / "boundaries" / "sf.geojson",
+    min_block_sides=20_000,  # 21,916 on 2026-10-19
 )
