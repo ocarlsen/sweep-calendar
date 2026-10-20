@@ -156,7 +156,7 @@ function fmtWindow([start, end]) {
   const s = new Date(start), e = new Date(end);
   const day = s.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: tz });
   const hr = (d) => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz })
-    .replace(":00", "").replace(" ", "").toLowerCase();
+    .replace(":00", "").replace(" ", "").toLowerCase().replace(/^12pm$/, "noon");
   return `${day}, ${hr(s)}–${hr(e)}`;
 }
 

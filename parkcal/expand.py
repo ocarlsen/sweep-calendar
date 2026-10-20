@@ -25,8 +25,11 @@ def holiday_table(city: City, first: date, last: date) -> Dict[date, HolidayKind
 
 def covered(rule: Rule, by: Rule) -> bool:
     """Every occurrence of `rule` falls inside an occurrence of `by`."""
-    return (rule.weekday is not None and rule.weekday == by.weekday and rule.weeks <= by.weeks
-            and by.start <= rule.start and rule.end <= by.end)
+    if rule.weekday is None or rule.weekday != by.weekday or not rule.weeks <= by.weeks:
+        return False
+    if rule.overnight != by.overnight:
+        return by.overnight and by.start <= rule.start  # a same-day window inside an overnight one's evening
+    return by.start <= rule.start and rule.end <= by.end
 
 
 def feed_rules(rules: List[Rule]) -> List[Rule]:
@@ -57,7 +60,8 @@ def windows(side: BlockSide, city: City, first: date, last: date,
     day = first
     while day <= last:
         spans = sorted(
-            (datetime.combine(day, r.start, tz), datetime.combine(day, r.end, tz))
+            (datetime.combine(day, r.start, tz),
+             datetime.combine(day + timedelta(days=1) if r.overnight else day, r.end, tz))
             for r in feed_rules(side.rules) if applies(r, day, holidays.get(day))
         )
         for start, end in spans:

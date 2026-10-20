@@ -29,9 +29,12 @@ class Signs(unittest.TestCase):
         for clause in ["No Stopping Anytime", "2 Hour Parking", "30min Max Parking Anytime",
                        "Loading Zone Only", "No Parking Anytime", "Trolley Only",
                        "No Parking 8am-6pm except Sundays, Holidays, or Horace Mann Permit",
-                       "No Parking 6am-10pm Sat-Sun, and 10pm-6am Any Day",
-                       "No Parking 2nd and 4th Monday 6pm-8am"]:  # overnight: not one same-day rule
+                       "No Parking 6am-10pm Sat-Sun, and 10pm-6am Any Day"]:
             self.assertIsNone(M.parse_sign(clause), clause)
+
+    def test_overnight_sign_runs_into_the_next_morning(self):
+        (w,) = M.parse_sign("No Parking 2nd and 4th Monday 6pm-8am")
+        self.assertEqual(w, (0, frozenset({2, 4}), time(18), time(8)))
 
     def test_sides_split(self):
         text = "West Side: No Stopping Anytime, East Side: No Parking Mondays and Thursdays 3am-6am"

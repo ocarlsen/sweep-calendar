@@ -29,7 +29,7 @@ class Rule:
     weekday: Optional[int]  # Monday=0 .. Sunday=6; None = holidays only
     weeks: FrozenSet[int]  # nth occurrence of the weekday in the month, 1..5
     start: time
-    end: time
+    end: time  # at or before `start` = the window runs into the next morning (8pm-5am)
     on_holidays: bool = False  # still enforced on PARTIAL holidays
     # Swept, but not posted: the city asks you to move, nobody is ticketed
     # (most of San Jose's residential streets).
@@ -38,6 +38,12 @@ class Rule:
     @property
     def holiday_only(self) -> bool:
         return self.weekday is None
+
+    @property
+    def overnight(self) -> bool:
+        """Ends the next day. The weekday, weeks and holidays all refer to the
+        day the window STARTS (Emeryville: "1st & 3rd Monday, 8pm-5am")."""
+        return self.end <= self.start
 
 
 @dataclass

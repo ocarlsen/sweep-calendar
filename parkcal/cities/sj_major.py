@@ -13,9 +13,8 @@ Anytime", "2 Hour Parking", "Loading Zone Only", permit exceptions). Only
 clauses shaped like a sweeping window are kept: optional "No Parking", days
 (nth weekdays, weekdays, or "Any Day") and one same-day time range. Anything
 else yields no rule for that side, and the side gets no calendar rather than
-a guessed one. Two shapes are skipped on purpose because one weekly rule
-can't express them: an overnight window (6pm-8am) and weekend-plus-nightly
-mixes.
+a guessed one. Overnight windows (6pm-8am) are rules that end the next
+morning; weekend-plus-nightly mixes are skipped on purpose.
 """
 import re
 from datetime import time
@@ -77,9 +76,7 @@ def parse_sign(clause: str) -> Optional[List[Window]]:
     m = RANGE.search(low)
     if not m:
         return None
-    start, end = parse_clock(m.group(1)), parse_clock(m.group(2))
-    if end <= start:
-        return None  # overnight window: not expressible as one same-day rule
+    start, end = parse_clock(m.group(1)), parse_clock(m.group(2))  # end <= start: runs overnight
     rest = re.sub(r"^\s*no parking\s+|\bfrom\b", " ", low[:m.start()] + " " + low[m.end():])
     days = parse_days(rest)
     return [(d, w, start, end) for d, w in days] if days else None

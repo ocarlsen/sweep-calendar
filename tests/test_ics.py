@@ -1,18 +1,24 @@
 """The feeds use RRULE/EXDATE/RDATE; check that an independent iCalendar
 implementation expands them to exactly the windows our own expander computes."""
 import unittest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from parkcal import ics
-from parkcal.cities import sf, sj
+from parkcal.cities import emeryville, sf, sj
 from parkcal.expand import windows
+from parkcal.model import BlockSide, Rule
 
 from .test_sf import SIDES as SF_SIDES
 from .test_sj import SIDES as SJ_SIDES
 from .test_sj_major import SIDES as SJ_MAJOR_SIDES
+from .test_emeryville import SIDES as EMV_SIDES
 
-CASES = ([(sf.CITY, s) for s in SF_SIDES.values()] + [(sj.CITY, s) for s in SJ_SIDES.values()]
-         + [(sj.CITY, s) for s in SJ_MAJOR_SIDES.values()])
+OVERNIGHT = BlockSide("night", "Test St", "A St - B St", "Both sides", [], rules=[
+    Rule(0, frozenset({1, 3}), time(20), time(5)), Rule(3, frozenset({1, 2, 3, 4, 5}), time(22), time(0))])
+
+CASES = ([(sf.CITY, s) for s in SF_SIDES.values()] + [(sf.CITY, OVERNIGHT)] + [(sj.CITY, s) for s in SJ_SIDES.values()]
+         + [(sj.CITY, s) for s in SJ_MAJOR_SIDES.values() if s.rules]
+         + [(emeryville.CITY, s) for s in EMV_SIDES.values()])
 
 try:
     import icalendar

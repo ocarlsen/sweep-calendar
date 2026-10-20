@@ -78,6 +78,16 @@ class Rules(unittest.TestCase):
         self.assertEqual((before.start.hour, after.start.hour), (8, 8))
         self.assertNotEqual(before.start.utcoffset(), after.start.utcoffset())
 
+    def test_overnight_window_ends_the_next_morning(self):
+        # Keyed on the start day: 1st & 3rd Monday 8pm to Tuesday 5am, across a DST change.
+        side = side_with(Rule(0, frozenset({1, 3}), time(20), time(5)))
+        got = windows(side, sf.CITY, date(2026, 10, 1), date(2026, 11, 30))
+        self.assertEqual([(w.start.date(), w.start.hour, w.end.date(), w.end.hour) for w in got],
+                         [(date(2026, 10, 5), 20, date(2026, 10, 6), 5),
+                          (date(2026, 10, 19), 20, date(2026, 10, 20), 5),
+                          (date(2026, 11, 2), 20, date(2026, 11, 3), 5),
+                          (date(2026, 11, 16), 20, date(2026, 11, 17), 5)])
+
     def test_back_to_back_windows_merge(self):
         side = side_with(Rule(0, frozenset({1}), time(0), time(2)),
                          Rule(0, frozenset({1}), time(2), time(6)))

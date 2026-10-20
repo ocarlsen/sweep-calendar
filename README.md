@@ -4,7 +4,7 @@ Street sweeping no-parking windows as a calendar your phone subscribes to.
 Pick your side of the block once; every sweep shows up in Calendar, holidays
 handled, and the feed keeps itself current.
 
-**Live:** https://parking.ocarlsen.com (San Francisco and San Jose; more cities planned)
+**Live:** https://parking.ocarlsen.com (San Francisco, San Jose and Emeryville)
 
 ## Why
 
@@ -71,6 +71,8 @@ would go wrong:
 - **Holiday rules** reproduce SFMTA's published 2026 enforcement table:
   New Year's, Thanksgiving and Christmas suspend all sweeping; other holidays
   suspend daytime sweeping but keep night sweeping.
+- **Overnight windows** (Emeryville's commercial 8pm–5am) are keyed on the day
+  they start and end the next morning, cross-checked like everything else.
 - **Edge cases:** 5th-weekday sweeps, DST transitions, split schedules
   ("2nd & 4th Tue" + "1st, 3rd, 5th Tue" = every Tuesday), San Jose's split
   posted windows ("8AM to NOON; then 1PM to 5PM") and per-side days, and a geometry
@@ -94,7 +96,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 Write `parkcal/cities/<slug>.py` exposing `CITY = City(...)` with a `load()`
 returning `BlockSide`s and a `holidays(year)` returning the city's suspension
 days, then register it in `parkcal/cities/__init__.py`. Candidates with
-usable open data: Chicago, Los Angeles.
+usable open data: San Mateo (parked, issue #4), Milpitas, Chicago, Los Angeles.
 
 ## Data
 
@@ -102,6 +104,7 @@ San Francisco Public Works street sweeping schedule,
 [DataSF yhqp-riqs](https://data.sf.gov/City-Infrastructure/Street-Sweeping-Schedule/yhqp-riqs).
 San José residential and major-road street sweeping routes,
 [San José open data](https://data.sanjoseca.gov/dataset/residential-street-sweeping-routes).
+Emeryville Street Sweeping Routes, City of Emeryville GIS (ArcGIS, "Authoritative view").
 Holiday policy from the
 [SFMTA holiday enforcement schedule](https://www.sfmta.com/getting-around/drive-park/holiday-enforcement-schedule).
 Map data © OpenStreetMap contributors.
