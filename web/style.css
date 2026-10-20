@@ -4,10 +4,11 @@
   --ink: #1c1b19;
   --muted: #6b675f;
   --line: #e2ded5;
-  --accent: #c2410c;
+  --accent: #244477;      /* the icon's navy */
   --accent-ink: #ffffff;
-  --side: #2563eb;
-  --side-hi: #c2410c;
+  --side: #6f95cf;
+  --side-hi: #1b3560;
+  --warn: #b45309;
   --radius: 12px;
   --shadow: 0 1px 2px rgb(0 0 0 / .06), 0 4px 16px rgb(0 0 0 / .05);
   color-scheme: light;
@@ -19,18 +20,19 @@
     --ink: #ece9e2;
     --muted: #a19c92;
     --line: #34322e;
-    --accent: #f97316;
-    --accent-ink: #1a0d04;
-    --side: #60a5fa;
-    --side-hi: #fb923c;
+    --accent: #7ea6e6;
+    --accent-ink: #0b1a33;
+    --side: #4f74ad;
+    --side-hi: #b9d3ff;
+    --warn: #f59e0b;
     --shadow: none;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #141412; --surface: #1e1d1b; --ink: #ece9e2; --muted: #a19c92;
-  --line: #34322e; --accent: #f97316; --accent-ink: #1a0d04;
-  --side: #60a5fa; --side-hi: #fb923c; --shadow: none; color-scheme: dark;
+  --line: #34322e; --accent: #7ea6e6; --accent-ink: #0b1a33;
+  --side: #4f74ad; --side-hi: #b9d3ff; --warn: #f59e0b; --shadow: none; color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -49,14 +51,7 @@ h1, h2, h3 { margin: 0; line-height: 1.2; }
   padding: 14px 16px; max-width: 1200px; margin: 0 auto;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
-.mark {
-  width: 34px; height: 34px; border-radius: 9px; background: var(--accent);
-  position: relative; flex: none;
-}
-.mark::after {
-  content: ""; position: absolute; left: 8px; right: 8px; top: 15px; height: 4px;
-  border-radius: 2px; background: var(--accent-ink);
-}
+.mark { width: 40px; height: 40px; flex: none; display: block; }
 h1 { font-size: 1.2rem; letter-spacing: -.01em; }
 .tag { margin: 2px 0 0; color: var(--muted); font-size: .9rem; }
 .cities {
@@ -85,8 +80,8 @@ h1 { font-size: 1.2rem; letter-spacing: -.01em; }
   box-shadow: var(--shadow);
 }
 .notice.warn {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+  background: color-mix(in srgb, var(--warn) 9%, var(--surface));
 }
 .notice p { margin: 0; color: var(--muted); }
 .notice .notice-h { color: var(--ink); font-weight: 700; font-size: 1.05rem; margin-bottom: 2px; }

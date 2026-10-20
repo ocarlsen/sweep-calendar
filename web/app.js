@@ -482,9 +482,16 @@ function renderPicker() {
     el("span", { class: "select-wrap" }, pick));
 }
 
+// Picking a city starts over there: the previous city's "Near ..." list,
+// open block and pin no longer describe anything on screen.
 async function goToCity(slug) {
   clearNotice();
   if (pin) { pin.remove(); pin = null; }
+  $("nearby").replaceChildren();
+  $("nearby").hidden = true;
+  $("detail").hidden = true;
+  $("intro").hidden = false;
+  history.replaceState(null, "", location.pathname);
   await openCity(slug);
 }
 
