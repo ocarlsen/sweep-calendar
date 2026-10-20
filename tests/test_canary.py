@@ -3,9 +3,9 @@ from datetime import date, time
 from pathlib import Path
 
 from parkcal import canary
-from parkcal.build import DataError, check_sanity
-from parkcal.cities import sf
-from parkcal.model import BlockSide, HolidayKind, Rule
+from parkcal.build import check_sanity
+from parkcal.cities import sf, sj
+from parkcal.model import BlockSide, DataError, HolidayKind, Rule
 
 PAGE = (Path(__file__).parent / "fixtures" / "sfmta_holidays_2026-10-19.html").read_text()
 
@@ -58,6 +58,31 @@ class BuildSanity(unittest.TestCase):
             check_sanity(sf.CITY, sides)
         self.assertIn("no schedule", str(e.exception))
         self.assertIn("MAX_MISSING_LINE", str(e.exception))
+
+
+class UnrecognizedSigns(unittest.TestCase):
+    def row(self, posted, routetype="Signed Route", weekday="Every Tuesday"):
+        return {"geometry": {"type": "LineString", "coordinates": [[-121.89, 37.33], [-121.89, 37.331]]},
+                "properties": {"CENTERLINEID": 1, "ROADNAME": "Test St", "ROADFROM": "A ST", "ROADTO": "B ST",
+                               "SIDEOFROAD": "Both", "ROUTETYPE": routetype, "APPPUBLICPOSTEDTIMES": posted,
+                               "APPWEEKDAY": weekday, "APPSCHEDULEDTIME": "1am - 6am", "PRIMARYSEGMENT": "Yes"}}
+
+    def test_every_phrase_the_city_uses_today_is_recognized(self):
+        import json
+        rows = json.loads((Path(__file__).parent / "fixtures" / "sj_major_sample.json").read_text())
+        sj.to_blocksides([], rows)  # raises DataError on anything unrecognized
+
+    def test_a_new_phrasing_fails_the_build(self):
+        # Positive control: a reworded sweeping sign the parser can't read.
+        with self.assertRaises(DataError) as e:
+            sj.to_blocksides([], [self.row("Both Sides: No Prkg Tue 1-6")])
+        self.assertIn("No Prkg Tue 1-6", str(e.exception))
+        with self.assertRaises(DataError):
+            sj.to_blocksides([], [self.row("", "Non-Signed Route", weekday="Tues & Thurs")])
+
+    def test_known_skips_pass(self):
+        sj.to_blocksides([], [self.row("Both Sides: No Stopping Anytime"),
+                              self.row("Both Sides: No Parking 2nd and 4th Monday 6pm-8am")])
 
 
 if __name__ == "__main__":

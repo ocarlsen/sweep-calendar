@@ -23,6 +23,20 @@ def holiday_table(city: City, first: date, last: date) -> Dict[date, HolidayKind
     return table
 
 
+def covered(rule: Rule, by: Rule) -> bool:
+    """Every occurrence of `rule` falls inside an occurrence of `by`."""
+    return (rule.weekday is not None and rule.weekday == by.weekday and rule.weeks <= by.weeks
+            and by.start <= rule.start and rule.end <= by.end)
+
+
+def feed_rules(rules: List[Rule]) -> List[Rule]:
+    """Rules that become calendar events. A not-ticketed sweep that always falls
+    inside a posted no-parking window adds nothing (you have already moved), so
+    it stays on the site's schedule but gets no event of its own."""
+    posted = [r for r in rules if not r.advisory]
+    return [r for r in rules if not (r.advisory and any(covered(r, t) for t in posted))]
+
+
 def applies(rule: Rule, day: date, holiday) -> bool:
     if holiday is HolidayKind.FULL:
         return False
@@ -44,7 +58,7 @@ def windows(side: BlockSide, city: City, first: date, last: date,
     while day <= last:
         spans = sorted(
             (datetime.combine(day, r.start, tz), datetime.combine(day, r.end, tz))
-            for r in side.rules if applies(r, day, holidays.get(day))
+            for r in feed_rules(side.rules) if applies(r, day, holidays.get(day))
         )
         for start, end in spans:
             if out and start <= out[-1].end:

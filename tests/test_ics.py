@@ -9,8 +9,10 @@ from parkcal.expand import windows
 
 from .test_sf import SIDES as SF_SIDES
 from .test_sj import SIDES as SJ_SIDES
+from .test_sj_major import SIDES as SJ_MAJOR_SIDES
 
-CASES = [(sf.CITY, s) for s in SF_SIDES.values()] + [(sj.CITY, s) for s in SJ_SIDES.values()]
+CASES = ([(sf.CITY, s) for s in SF_SIDES.values()] + [(sj.CITY, s) for s in SJ_SIDES.values()]
+         + [(sj.CITY, s) for s in SJ_MAJOR_SIDES.values()])
 
 try:
     import icalendar

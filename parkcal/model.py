@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Callable, Dict, FrozenSet, List, Optional, Tuple
 
 
+class DataError(SystemExit):
+    """A city's source data looks broken or has changed shape; fail the build,
+    keep the last good deploy live."""
+
+
 class HolidayKind(Enum):
     # Nothing is swept anywhere (SF: New Year's, Thanksgiving, Christmas).
     FULL = "full"
@@ -47,6 +52,10 @@ class BlockSide:
     # Same-schedule pieces of this block split off by a minor street (see
     # merge.py). Their feed URLs stay valid and serve this side's calendar.
     joined: List["BlockSide"] = field(default_factory=list)
+    # Posted restrictions that aren't a sweeping window ("No Stopping Anytime",
+    # "2 Hour Parking"); shown on the site so an empty calendar isn't read as
+    # "park freely", never turned into events.
+    notes: List[str] = field(default_factory=list)
 
     @property
     def pieces(self) -> List["BlockSide"]:

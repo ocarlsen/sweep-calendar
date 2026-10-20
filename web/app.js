@@ -50,6 +50,14 @@ function offsetLine(line, curb) {
 // multi-polyline so they highlight and select together.
 function shape(s) { return s.parts.map((p) => offsetLine(p.line, p.curb)); }
 
+// One way to draw a block side, so a line made for a deep link or a search
+// result gets the same click handler and hover label as one made by panning.
+function sideLine(s) {
+  return L.polyline(shape(s), styleFor(s.id))
+    .on("click", () => select(s))
+    .bindTooltip(`${s.street} · ${s.side}`, { sticky: true });
+}
+
 function distanceToSide(pt, s) {
   return Math.min(...s.parts.map((p) => distanceToLine(pt, p.line)));
 }
@@ -127,9 +135,7 @@ async function redraw() {
     if (!s.parts.some((p) => p.line.some(([x, y]) => view.contains([y, x])))) continue;
     wanted.add(s.id);
     if (state.layers.has(s.id)) continue;
-    const layer = L.polyline(shape(s), styleFor(s.id))
-      .on("click", () => select(s))
-      .bindTooltip(`${s.street} · ${s.side}`, { sticky: true });
+    const layer = sideLine(s);
     layer.addTo(sideLayer);
     state.layers.set(s.id, layer);
   }
@@ -181,8 +187,7 @@ function select(s, { fly = false } = {}) {
   state.selected = s;
   if (prev && state.layers.has(prev.id)) state.layers.get(prev.id).setStyle(styleFor(prev.id));
   if (!state.layers.has(s.id)) {
-    const layer = L.polyline(shape(s), styleFor(s.id)).addTo(sideLayer)
-      .on("click", () => select(s));
+    const layer = sideLine(s).addTo(sideLayer);
     state.layers.set(s.id, layer);
   }
   const layer = state.layers.get(s.id);
@@ -265,6 +270,16 @@ function inAppBrowser() {
   return /LinkedInApp|Twitter|FBAN|FBAV|Instagram|; wv\)/i.test(navigator.userAgent);
 }
 
+// "Every day 3am–6am · sweeper comes Mon & Thu": the part after " · " is a
+// detail about the line, shown smaller underneath it.
+function section(title, lines) {
+  const item = (t) => {
+    const [main, detail] = t.split(" · ");
+    return el("li", {}, main, detail ? el("span", { class: "detail-note" }, detail) : "");
+  };
+  return lines.length ? [el("h3", {}, title), el("ul", {}, ...lines.map(item))] : [];
+}
+
 function showDetail(s) {
   const d = $("detail");
   const copy = copyButton("Copy calendar URL", () => feedURL(s, "https"));
@@ -274,16 +289,24 @@ function showDetail(s) {
     el("h2", {}, s.street),
     el("p", { class: "limits" }, s.limits),
     el("span", { class: "pill" }, s.side),
-    el("h3", {}, s.advisory ? "Street sweeping" : "No parking"),
-    el("ul", {}, ...s.schedule.map((t) => el("li", {}, t))),
-    el("h3", {}, "Next sweeps"),
-    el("ul", {}, ...(s.next.length ? s.next.map((w) => el("li", {}, fmtWindow(w))) : [el("li", {}, "None in the next two months")])),
-    inAppBrowser() ? el("p", { class: "notice warn inapp" },
-      "To subscribe, open this page in Safari or Chrome: tap the ⋯ menu, then Open in browser.") : "",
-    el("div", { class: "actions" }, ...calendarButtons(s, copy), share),
-    s.advisory ? el("p", { class: "hint" },
-      "This block isn't posted, so there are no tickets, but the city asks you to move your car so the curb gets swept.") : "",
-    el("p", { class: "hint" }, HINTS[platform()]),
+    // What's posted (ticketed) and when the sweeper comes where nothing is
+    // posted are different facts; show each under its own heading.
+    ...section("No parking (posted)", s.noParking),
+    ...section("Street sweeping (not ticketed)", s.sweeping),
+    ...(s.notes.length ? [el("h3", {}, "Also posted"), el("ul", {}, ...s.notes.map((n) => el("li", {}, n.replace(/^Posted: /, ""))))] : []),
+    ...(s.hasFeed ? [
+      el("h3", {}, "Next sweeps"),
+      el("ul", {}, ...(s.next.length ? s.next.map((w) => el("li", {}, fmtWindow(w))) : [el("li", {}, "None in the next two months")])),
+      inAppBrowser() ? el("p", { class: "notice warn inapp" },
+        "To subscribe, open this page in Safari or Chrome: tap the ⋯ menu, then Open in browser.") : "",
+      el("div", { class: "actions" }, ...calendarButtons(s, copy), share),
+      s.sweeping.length && !s.noParking.length ? el("p", { class: "hint" },
+        "This block isn't posted for sweeping, so there are no tickets, but the city asks you to move your car so the curb gets swept.") : "",
+      el("p", { class: "hint" }, HINTS[platform()]),
+    ] : [
+      el("p", { class: "hint" }, "No sweeping calendar for this curb: the posted sign above is the rule here."),
+      el("div", { class: "actions" }, share),
+    ]),
     el("p", { class: "hint" },
       "Sign says something different? ",
       el("a", { href: problemURL(s), target: "_blank", rel: "noopener" }, "Report a problem")),
@@ -342,7 +365,7 @@ async function nearbyFrom(lat, lon, label, hit) {
         mouseleave: () => state.layers.get(s.id)?.setStyle(styleFor(s.id)),
       } },
         el("div", { class: "st" }, `${s.street} · ${s.side}`),
-        el("div", { class: "sub" }, `${s.limits} · ${s.schedule.join("; ")} · ${Math.round(d)} m`)))));
+        el("div", { class: "sub" }, `${s.limits} · ${(s.schedule.length ? s.schedule : s.notes).join("; ")} · ${Math.round(d)} m`)))));
   $("intro").hidden = true;
   $("detail").hidden = true;
   list.hidden = false;

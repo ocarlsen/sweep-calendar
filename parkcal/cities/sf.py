@@ -15,19 +15,18 @@ listed holiday suspends daytime sweeping but enforces night sweeping, which
 is what the `holidays` flag marks.
 """
 import json
-import math
 from datetime import date, time, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 from ..fetch import get
+from ..geometry import side_from_geometry  # noqa: F401 (tests use sf.side_from_geometry)
 from ..holidays import last_weekday, nth_weekday, observed
 from ..model import BlockSide, City, HolidayKind, Rule
 
 DATASET = "https://data.sf.gov/resource/yhqp-riqs.json"
 SOURCE_URL = "https://data.sf.gov/City-Infrastructure/Street-Sweeping-Schedule/yhqp-riqs"
 WEEKDAYS = {"Mon": 0, "Tues": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
-CARDINALS = ["East", "NorthEast", "North", "NorthWest", "West", "SouthWest", "South", "SouthEast"]
 
 
 def holidays(year: int) -> Dict[date, HolidayKind]:
@@ -75,20 +74,6 @@ def parse_rule(row: dict) -> Rule:
         end=time(int(row["tohour"])),
         on_holidays=row.get("holidays") == "1",
     )
-
-
-def side_from_geometry(line: List[List[float]], rightleft: str) -> Optional[str]:
-    """Cardinal side for rows missing `blockside`: the normal to the segment's
-    overall direction, to the right or left of how the CNN line is drawn."""
-    if len(line) < 2:
-        return None
-    (x0, y0), (x1, y1) = line[0], line[-1]
-    dx, dy = (x1 - x0) * math.cos(math.radians(y0)), y1 - y0
-    nx, ny = (dy, -dx) if rightleft == "R" else (-dy, dx)
-    if nx == 0 and ny == 0:
-        return None
-    octant = round(math.degrees(math.atan2(ny, nx)) / 45) % 8
-    return CARDINALS[octant]
 
 
 def side_label(cardinal: Optional[str]) -> str:

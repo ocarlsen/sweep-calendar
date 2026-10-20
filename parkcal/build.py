@@ -10,6 +10,7 @@ Writes, per city:
 and <out>/cities.json listing them all, next to the static front end in web/.
 """
 import argparse
+import hashlib
 import json
 import math
 import shutil
@@ -20,9 +21,9 @@ from typing import Dict, List
 
 from . import ics
 from .cities import CITIES
-from .expand import Window, holiday_table, windows
+from .expand import Window, covered, holiday_table, windows
 from .merge import join_split_blocks
-from .model import BlockSide, City, Rule
+from .model import BlockSide, City, DataError, Rule
 
 WEB = Path(__file__).resolve().parent.parent / "web"  # static front end
 NEXT_HORIZON = timedelta(days=62)  # enough to find the next 3 sweeps of a monthly rule
@@ -31,7 +32,7 @@ ORDINAL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th", 5: "5th"}
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def describe(rule: Rule) -> str:
+def describe(rule: Rule, tag: bool = True) -> str:
     hours = f"{ics.hour_label(rule.start)}–{ics.hour_label(rule.end)}"
     if rule.holiday_only:
         return f"Holidays {hours}"
@@ -44,7 +45,69 @@ def describe(rule: Rule) -> str:
         names = [ORDINAL[n] for n in sorted(rule.weeks)]
         joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " & " + names[-1]
         days = f"{joined} {DAYS[rule.weekday]}"
-    return f"{days} {hours}" + (" (not ticketed)" if rule.advisory else "")
+    return f"{days} {hours}" + (" (not ticketed)" if tag and rule.advisory else "")
+
+
+def schedule_lines(rules: List[Rule], tag: bool = True) -> List[str]:
+    """Rules as the panel lists them. Every-week rules that share hours collapse
+    into one line ("Every Mon & Thu 3am–6am", "Every day 3am–6am"); anything
+    with specific weeks stays one line per rule, since "1st & 3rd Mon & Thu"
+    would be ambiguous."""
+    order = sorted(rules, key=lambda r: (r.weekday is None, r.start, r.weekday or 0))
+    groups: Dict[tuple, List[Rule]] = {}
+    lines: List[tuple] = []
+    for r in order:
+        if not r.holiday_only and len(r.weeks) == 5:
+            key = (r.start, r.end, r.advisory)
+            if key not in groups:
+                groups[key] = []
+                lines.append(("group", key))
+            groups[key].append(r)
+        else:
+            lines.append(("rule", r))
+    out = []
+    for kind, item in lines:
+        if kind == "rule":
+            out.append(describe(item, tag))
+            continue
+        rs = groups[item]
+        if len(rs) == 1:
+            out.append(describe(rs[0], tag))
+            continue
+        start, end, advisory = item
+        days = "day" if len(rs) == 7 else " & ".join(DAYS[r.weekday] for r in sorted(rs, key=lambda r: r.weekday))
+        out.append(f"Every {days} {ics.hour_label(start)}–{ics.hour_label(end)}"
+                   + (" (not ticketed)" if tag and advisory else ""))
+    return out
+
+
+def schedule_sections(rules: List[Rule]) -> Dict[str, List[str]]:
+    """The panel's "No parking (posted)" and "Street sweeping (not ticketed)"
+    lists. A scheduled sweep that falls inside a posted window isn't a second
+    rule, it's which of those nights the sweeper actually comes, so it folds
+    into the posted line: "Every day 3am–6am · sweeper comes Mon & Thu"."""
+    posted = [r for r in rules if not r.advisory]
+    inside = [r for r in rules if r.advisory and any(covered(r, t) for t in posted)]
+    sweeping = [r for r in rules if r.advisory and r not in inside]
+    lines = schedule_lines(posted, tag=False)
+    # Only worth saying when the sweeper comes on fewer days than the sign covers.
+    if {(r.weekday, r.weeks, r.start, r.end) for r in inside} == {
+            (r.weekday, r.weeks, r.start, r.end) for r in posted}:
+        inside = []
+    if inside:
+        if all(len(r.weeks) == 5 for r in inside):
+            days = " & ".join(DAYS[d] for d in sorted({r.weekday for r in inside}))
+        else:
+            days = "; ".join(describe(Rule(r.weekday, r.weeks, r.start, r.end), tag=False).rsplit(" ", 1)[0]
+                             for r in inside)
+        same_hours = len({(r.start, r.end) for r in inside + posted}) == 1
+        when = days if same_hours else "; ".join(schedule_lines(inside, tag=False))
+        note = f"sweeper comes {when}"
+        if len(lines) == 1:
+            lines = [f"{lines[0]} · {note}"]
+        else:
+            lines.append(note[0].upper() + note[1:])
+    return {"noParking": lines, "sweeping": schedule_lines(sweeping, tag=False)}
 
 
 def tile_key(lon: float, lat: float) -> str:
@@ -52,14 +115,18 @@ def tile_key(lon: float, lat: float) -> str:
 
 
 def summary(side: BlockSide, upcoming: List[Window]) -> dict:
-    order = sorted(side.rules, key=lambda r: (r.weekday is None, r.weekday or 0, r.start))
     return {
         "id": side.id,
         "street": side.street,
         "limits": side.limits,
         "side": side.side,
-        "schedule": [describe(r) for r in order],
+        "schedule": schedule_lines(side.rules),  # one list, for compact views
+        # The panel's two sections: what's posted (ticketed), and when the
+        # sweeper is scheduled where nothing is posted.
+        **schedule_sections(side.rules),
         "advisory": all(r.advisory for r in side.rules),
+        "notes": side.notes,
+        "hasFeed": bool(side.rules),
         "next": [[w.start.isoformat(timespec="minutes"), w.end.isoformat(timespec="minutes")]
                  for w in upcoming[:3]],
         "parts": [{"id": p.id, "curb": p.curb,
@@ -71,10 +138,6 @@ def summary(side: BlockSide, upcoming: List[Window]) -> dict:
 MAX_MISSING_LINE = 0.01  # share of block sides allowed without map geometry
 
 
-class DataError(SystemExit):
-    """A city's source data looks broken; fail the build, keep the live site."""
-
-
 def check_sanity(city: City, sides: List[BlockSide]) -> None:
     """Refuse to publish partial or malformed data. Every check names the
     knob, the value seen, and why, so a failed Monday run says what to look at."""
@@ -82,7 +145,7 @@ def check_sanity(city: City, sides: List[BlockSide]) -> None:
     if len(sides) < city.min_block_sides:
         problems.append(f"{len(sides)} block sides < min_block_sides={city.min_block_sides} "
                         "(source returned partial data?)")
-    no_rules = [s.id for s in sides if not s.rules]
+    no_rules = [s.id for s in sides if not s.rules and not s.notes]  # note-only curbs are deliberate
     if no_rules:
         problems.append(f"{len(no_rules)} block sides with no schedule, e.g. {no_rules[:3]}")
     no_line = sum(1 for s in sides if not s.line)
@@ -111,9 +174,10 @@ def build_city(city: City, out: Path, days: int, cache: Path = None) -> dict:
     tiles: Dict[str, list] = defaultdict(list)
     lons, lats = [], []
     for side in sides:
-        feed = ics.calendar(side, city, today, last, stamp, holidays).encode()
-        for piece in side.pieces:
-            (root / "feeds" / f"{piece.id}.ics").write_bytes(feed)
+        if side.rules:  # a note-only curb ("Posted: No Stopping Anytime") has nothing to subscribe to
+            feed = ics.calendar(side, city, today, last, stamp, holidays).encode()
+            for piece in side.pieces:
+                (root / "feeds" / f"{piece.id}.ics").write_bytes(feed)
         if side.line:
             upcoming = windows(side, city, today, today + NEXT_HORIZON, holidays)
             tiles[tile_key(*side.line[0])].append(summary(side, upcoming))
@@ -161,13 +225,14 @@ def main(argv=None) -> None:
         built.append(entry)
     (args.out / "cities.json").write_text(json.dumps(built, indent=1))
     shutil.copytree(WEB, args.out, dirs_exist_ok=True)
-    # Version the front end's own assets so a deploy never pairs new data with
-    # a cached old app.js.
+    # Version the front end's own assets by content, so any change gets a new
+    # URL (a timestamp collided when two builds landed in the same minute).
     index = args.out / "index.html"
-    version = datetime.now(timezone.utc).strftime("%Y%m%d%H%M")
-    index.write_text(index.read_text()
-                     .replace('src="app.js"', f'src="app.js?v={version}"')
-                     .replace('href="style.css"', f'href="style.css?v={version}"'))
+    html = index.read_text()
+    for name, attr in (("app.js", "src"), ("style.css", "href")):
+        digest = hashlib.sha256((args.out / name).read_bytes()).hexdigest()[:10]
+        html = html.replace(f'{attr}="{name}"', f'{attr}="{name}?v={digest}"')
+    index.write_text(html)
 
 
 if __name__ == "__main__":

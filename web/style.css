@@ -159,6 +159,7 @@ button:focus-visible, .btn:focus-visible, input:focus-visible, select:focus-visi
 .detail ul { margin: 0; padding: 0; list-style: none; }
 .detail li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .detail li:last-child { border-bottom: 0; }
+.detail .detail-note { display: block; color: var(--muted); font-size: .88rem; }
 .actions { display: grid; gap: 8px; margin-top: 18px; }
 .actions .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .actions .row > * { padding: 10px 8px; white-space: nowrap; font-size: .92rem; }

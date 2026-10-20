@@ -10,7 +10,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Dict, Iterator, List
 from zoneinfo import ZoneInfo
 
-from .expand import applies, holiday_table
+from .expand import applies, feed_rules, holiday_table
 from .holidays import week_of_month
 from .model import BlockSide, City, HolidayKind, Rule
 
@@ -99,7 +99,7 @@ def scheduled(rule: Rule, day: date) -> bool:
 
 
 def calendar_title(side: BlockSide) -> str:
-    return "Street sweeping" if all(r.advisory for r in side.rules) else "No parking"
+    return "Street sweeping" if all(r.advisory for r in feed_rules(side.rules)) else "No parking"
 
 
 def calendar(side: BlockSide, city: City, first: date, last: date,
@@ -147,7 +147,8 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
         ])
 
     covered = set()  # (day, start, end) already produced by a weekday rule
-    weekly = sorted((r for r in side.rules if not r.holiday_only),
+    rules = feed_rules(side.rules)
+    weekly = sorted((r for r in rules if not r.holiday_only),
                     key=lambda r: (r.weekday, r.start))
     for r in weekly:
         hits = [d for d in days(first, last) if scheduled(r, d)]
@@ -166,7 +167,7 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
         event(f"{DAYS[r.weekday]}{''.join(map(str, sorted(r.weeks)))}"
               f"-{clock_id(r.start)}{clock_id(r.end)}", r, hits[0], extra)
 
-    for r in side.rules:
+    for r in rules:
         if not r.holiday_only:
             continue
         dates = [d for d in days(first, last)

@@ -42,6 +42,15 @@ city open data ──► city adapter ──► Rule model ──► RRULE feeds
 - **Ticketed vs. not.** Most San Jose residential streets are swept but not
   posted: the city asks you to move, nobody is ticketed. Those events say
   "move your car (not ticketed)"; posted streets say "No parking".
+- **What the sign says wins.** San Jose's major roads come with two answers:
+  the sweep schedule and the posted sign, which often disagree and mix in
+  unrelated rules ("No Stopping Anytime", "2 Hour Parking"). The site shows
+  both, under separate headings: **No parking (posted)** from sign clauses
+  shaped like a sweeping window, each side of the road on its own, and
+  **Street sweeping (not ticketed)** from the schedule where it applies to that
+  curb. A curb whose sign forbids parking outright shows the sign and no
+  calendar; a time-limit curb gets the sweep. A sweep inside a posted window
+  adds no duplicate event.
 
 ## Correctness
 
@@ -52,9 +61,13 @@ would go wrong:
   a separate iCalendar implementation (`icalendar` + `recurring-ical-events`)
   and must produce exactly the windows our own expander computes, over a full
   year. CI runs it on a real-data sample from each city; full runs over all
-  21,916 SF and 18,615 San Jose block sides found zero mismatches. It caught a real bug: an RRULE mixing
+  21,916 SF and 19,324 San Jose calendars found zero mismatches. It caught a real bug: an RRULE mixing
   `BYDAY=FR` with `BYDAY=2WE` that the library (and likely some calendar apps)
   expands differently, so each rule is now its own event.
+- **Unrecognized city text fails the build.** Every San Jose major-road sign
+  clause must be a sweeping window, a known non-sweeping restriction, or a
+  shape skipped on purpose; a reworded sign stops the deploy and names the
+  phrase instead of silently dropping a ticketed curb.
 - **Holiday rules** reproduce SFMTA's published 2026 enforcement table:
   New Year's, Thanksgiving and Christmas suspend all sweeping; other holidays
   suspend daytime sweeping but keep night sweeping.
@@ -87,9 +100,8 @@ usable open data: Chicago, Los Angeles.
 
 San Francisco Public Works street sweeping schedule,
 [DataSF yhqp-riqs](https://data.sf.gov/City-Infrastructure/Street-Sweeping-Schedule/yhqp-riqs).
-San José residential street sweeping routes,
-[San José open data](https://data.sanjoseca.gov/dataset/residential-street-sweeping-routes)
-(major-road routes not yet included).
+San José residential and major-road street sweeping routes,
+[San José open data](https://data.sanjoseca.gov/dataset/residential-street-sweeping-routes).
 Holiday policy from the
 [SFMTA holiday enforcement schedule](https://www.sfmta.com/getting-around/drive-park/holiday-enforcement-schedule).
 Map data © OpenStreetMap contributors.
