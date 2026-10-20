@@ -199,7 +199,7 @@ function showDetail(s) {
     el("h2", {}, s.street),
     el("p", { class: "limits" }, s.limits),
     el("span", { class: "pill" }, s.side),
-    el("h3", {}, "No parking"),
+    el("h3", {}, s.advisory ? "Street sweeping" : "No parking"),
     el("ul", {}, ...s.schedule.map((t) => el("li", {}, t))),
     el("h3", {}, "Next sweeps"),
     el("ul", {}, ...(s.next.length ? s.next.map((w) => el("li", {}, fmtWindow(w))) : [el("li", {}, "None in the next two months")])),
@@ -208,6 +208,8 @@ function showDetail(s) {
       el("div", { class: "row" },
         el("a", { class: "btn ghost", href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feedURL(s, "webcal"))}`, target: "_blank", rel: "noopener" }, "Google Calendar"),
         copy)),
+    s.advisory ? el("p", { class: "hint" },
+      "This block isn't posted, so there are no tickets, but the city asks you to move your car so the curb gets swept.") : "",
     el("p", { class: "hint" },
       "On iPhone, Subscribe opens Calendar directly. iOS hides alerts on subscribed calendars by default; ",
       "turn off Remove Alerts in the subscription's settings to get a reminder the day before."),
@@ -260,8 +262,14 @@ async function nearbyFrom(lat, lon, label) {
 // ---- coverage --------------------------------------------------------------
 
 
-function rings(geom) {
-  return geom.type === "MultiPolygon" ? geom.coordinates.map((p) => p[0]) : [geom.coordinates[0]];
+function polygons(geom) {
+  return geom.type === "MultiPolygon" ? geom.coordinates : [geom.coordinates];
+}
+
+// Inside a polygon = inside its outer ring and outside its holes (San Jose
+// has unincorporated county pockets within its limits).
+function inArea(pt, geom) {
+  return polygons(geom).some(([outer, ...holes]) => inRing(pt, outer) && !holes.some((h) => inRing(pt, h)));
 }
 
 function inRing([x, y], ring) {
@@ -283,9 +291,9 @@ function cityArea(c) {
 function locate(pt) {
   let nearest = null;
   for (const c of state.cities) {
-    const rs = rings(cityArea(c));
-    if (rs.some((r) => inRing(pt, r))) return { city: c, inside: true, d: 0 };
-    const d = Math.min(...rs.map((r) => distanceToLine(pt, r)));
+    const area = cityArea(c);
+    if (inArea(pt, area)) return { city: c, inside: true, d: 0 };
+    const d = Math.min(...polygons(area).flat().map((r) => distanceToLine(pt, r)));
     if (!nearest || d < nearest.d) nearest = { city: c, inside: false, d };
   }
   return nearest;

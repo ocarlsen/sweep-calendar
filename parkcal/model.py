@@ -26,6 +26,9 @@ class Rule:
     start: time
     end: time
     on_holidays: bool = False  # still enforced on PARTIAL holidays
+    # Swept, but not posted: the city asks you to move, nobody is ticketed
+    # (most of San Jose's residential streets).
+    advisory: bool = False
 
     @property
     def holiday_only(self) -> bool:
@@ -64,3 +67,6 @@ class City:
     # GeoJSON Feature of the city limits (simplified), used to draw coverage
     # and to tell "in this city" from "outside coverage" after geocoding.
     boundary: Optional[Path] = None
+    # Appended to every event's description, e.g. a holiday caveat the data
+    # cannot express.
+    feed_note: str = ""

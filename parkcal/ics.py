@@ -38,8 +38,17 @@ def fold(line: str) -> str:
 
 
 def hour_label(t: time) -> str:
+    if (t.hour, t.minute) == (12, 0):
+        return "noon"
     h = t.hour % 12 or 12
-    return f"{h}{'am' if t.hour < 12 else 'pm'}"
+    m = f":{t.minute:02d}" if t.minute else ""
+    return f"{h}{m}{'am' if t.hour < 12 else 'pm'}"
+
+
+def clock_id(t: time) -> str:
+    """Compact time for UIDs; whole hours keep the original 2-digit form so
+    existing subscribers' event UIDs don't change."""
+    return f"{t:%H}" if not t.minute else f"{t:%H%M}"
 
 
 def utc(dt: datetime) -> str:
@@ -89,6 +98,10 @@ def scheduled(rule: Rule, day: date) -> bool:
     return day.weekday() == rule.weekday and week_of_month(day) in rule.weeks
 
 
+def calendar_title(side: BlockSide) -> str:
+    return "Street sweeping" if all(r.advisory for r in side.rules) else "No parking"
+
+
 def calendar(side: BlockSide, city: City, first: date, last: date,
              stamp: datetime, holidays: Dict[date, HolidayKind] = None) -> str:
     holidays = holiday_table(city, first, last) if holidays is None else holidays
@@ -99,14 +112,19 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
     lines: List[str] = [
         "BEGIN:VCALENDAR", "VERSION:2.0", f"PRODID:{PRODID}",
         "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-        f"X-WR-CALNAME:{escape(f'No parking: {side.street} ({side.side})')}",
+        f"X-WR-CALNAME:{escape(f'{calendar_title(side)}: {side.street} ({side.side})')}",
         f"X-WR-TIMEZONE:{city.tz}",
         "REFRESH-INTERVAL;VALUE=DURATION:P1D", "X-PUBLISHED-TTL:P1D",
         *vtimezone(city.tz, first.year),
     ]
 
-    def event(uid: str, start: time, end: time, dtstart: date, extra: List[str]):
+    note = f" {city.feed_note}" if city.feed_note else ""
+
+    def event(uid: str, r: Rule, dtstart: date, extra: List[str]):
+        start, end = r.start, r.end
         hours = f"{hour_label(start)}–{hour_label(end)}"
+        summary = (f"Street sweeping {hours}: move your car (not ticketed)" if r.advisory
+                   else f"No parking {hours}: street sweeping")
         lines.extend([
             "BEGIN:VEVENT",
             f"UID:{city.slug}-{side.id}-{uid}@{DOMAIN}",
@@ -114,9 +132,9 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
             f"DTSTART;{tzid}:{local(dtstart, start)}",
             f"DTEND;{tzid}:{local(dtstart, end)}",
             *extra,
-            f"SUMMARY:{escape(f'No parking {hours}: street sweeping')}",
+            f"SUMMARY:{escape(summary)}",
             f"LOCATION:{escape(where)}",
-            f"DESCRIPTION:{escape(f'Posted signs control. Source: {city.source_url}')}",
+            f"DESCRIPTION:{escape(f'Posted signs control.{note} Source: {city.source_url}')}",
             "TRANSP:TRANSPARENT",
             "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT12H",
             f"DESCRIPTION:{escape(f'Move your car: sweeping {hours}')}",
@@ -142,7 +160,7 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
         extra = [f"RRULE:{rrule};UNTIL={until}"]
         extra += [f"EXDATE;{tzid}:{local(d, r.start)}" for d in skipped]
         event(f"{DAYS[r.weekday]}{''.join(map(str, sorted(r.weeks)))}"
-              f"-{r.start:%H}{r.end:%H}", r.start, r.end, hits[0], extra)
+              f"-{clock_id(r.start)}{clock_id(r.end)}", r, hits[0], extra)
 
     for r in side.rules:
         if not r.holiday_only:
@@ -151,7 +169,7 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
                  if applies(r, d, holidays.get(d)) and (d, r.start, r.end) not in covered]
         if dates:
             extra = [f"RDATE;{tzid}:{local(d, r.start)}" for d in dates[1:]]
-            event(f"hol{r.start:%H}{r.end:%H}", r.start, r.end, dates[0], extra)
+            event(f"hol{clock_id(r.start)}{clock_id(r.end)}", r, dates[0], extra)
 
     lines.append("END:VCALENDAR")
     return "".join(fold(l) + "\r\n" for l in lines)

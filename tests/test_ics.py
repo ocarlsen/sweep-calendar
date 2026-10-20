@@ -4,10 +4,13 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 
 from parkcal import ics
-from parkcal.cities import sf
+from parkcal.cities import sf, sj
 from parkcal.expand import windows
 
-from .test_sf import SIDES
+from .test_sf import SIDES as SF_SIDES
+from .test_sj import SIDES as SJ_SIDES
+
+CASES = [(sf.CITY, s) for s in SF_SIDES.values()] + [(sj.CITY, s) for s in SJ_SIDES.values()]
 
 try:
     import icalendar
@@ -31,8 +34,8 @@ def merged(spans):
 
 class Format(unittest.TestCase):
     def test_lines_are_crlf_and_folded(self):
-        for side in SIDES.values():
-            text = ics.calendar(side, sf.CITY, FIRST, LAST, STAMP)
+        for city, side in CASES:
+            text = ics.calendar(side, city, FIRST, LAST, STAMP)
             self.assertTrue(text.endswith("\r\n"))
             for line in text.split("\r\n"):
                 self.assertLessEqual(len(line.encode()), 75, line)
@@ -45,11 +48,11 @@ class Format(unittest.TestCase):
 class CrossCheck(unittest.TestCase):
     def test_feeds_expand_to_expected_windows(self):
         checked = 0
-        for side in SIDES.values():
-            feed = icalendar.Calendar.from_ical(ics.calendar(side, sf.CITY, FIRST, LAST, STAMP))
+        for city, side in CASES:
+            feed = icalendar.Calendar.from_ical(ics.calendar(side, city, FIRST, LAST, STAMP))
             events = recurring_ical_events.of(feed).between(FIRST, LAST + timedelta(days=1))
             got = merged((e["DTSTART"].dt, e["DTEND"].dt) for e in events)
-            want = [(w.start, w.end) for w in windows(side, sf.CITY, FIRST, LAST)]
+            want = [(w.start, w.end) for w in windows(side, city, FIRST, LAST)]
             self.assertEqual(got, want, side.id)
             checked += len(want)
         self.assertGreater(checked, 1000)

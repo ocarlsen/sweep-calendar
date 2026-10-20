@@ -44,7 +44,7 @@ def describe(rule: Rule) -> str:
         names = [ORDINAL[n] for n in sorted(rule.weeks)]
         joined = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " & " + names[-1]
         days = f"{joined} {DAYS[rule.weekday]}"
-    return f"{days} {hours}"
+    return f"{days} {hours}" + (" (not ticketed)" if rule.advisory else "")
 
 
 def tile_key(lon: float, lat: float) -> str:
@@ -59,6 +59,7 @@ def summary(side: BlockSide, upcoming: List[Window]) -> dict:
         "limits": side.limits,
         "side": side.side,
         "schedule": [describe(r) for r in order],
+        "advisory": all(r.advisory for r in side.rules),
         "next": [[w.start.isoformat(timespec="minutes"), w.end.isoformat(timespec="minutes")]
                  for w in upcoming[:3]],
         "parts": [{"id": p.id, "curb": p.curb,
