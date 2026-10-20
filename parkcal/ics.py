@@ -136,7 +136,9 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
             f"LOCATION:{escape(where)}",
             f"DESCRIPTION:{escape(f'Posted signs control.{note} Source: {city.source_url}')}",
             "TRANSP:TRANSPARENT",
-            "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT12H",
+            # Long-form duration: same meaning as -PT12H, and reportedly the
+            # only form Google Calendar honors in subscribed feeds.
+            "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-P0DT12H0M0S",
             f"DESCRIPTION:{escape(f'Move your car: sweeping {hours}')}",
             "END:VALARM",
             "END:VEVENT",
