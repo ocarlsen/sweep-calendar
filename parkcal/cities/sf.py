@@ -154,4 +154,5 @@ CITY = City(
     holidays=holidays,
     load=load,
     minor_street=minor_street,
+    boundary=Path(__file__).parent / "boundaries" / "sf.geojson",
 )

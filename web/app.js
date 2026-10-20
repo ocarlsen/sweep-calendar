@@ -5,9 +5,12 @@
 const MIN_ZOOM = 16;        // below this, block sides are too dense to tap
 const OFFSET_M = 5;         // draw each curb this many meters off the centerline
 const NEARBY = 6;
+const NEAR_SIDE_M = 200;    // farther than this from any block side: no schedule here
+const JUST_OUTSIDE_M = 3000; // closer than this to a city's edge reads "just outside"
+const REPO = "https://github.com/ocarlsen/sweep-calendar";
 
 const $ = (id) => document.getElementById(id);
-const state = { city: null, tiles: new Map(), pending: new Map(), layers: new Map(), selected: null };
+const state = { cities: [], city: null, tiles: new Map(), pending: new Map(), layers: new Map(), selected: null };
 
 const map = L.map("map", { zoomControl: true, attributionControl: true });
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -113,7 +116,7 @@ async function redraw() {
   if (map.getZoom() < MIN_ZOOM) {
     sideLayer.clearLayers();
     state.layers.clear();
-    setStatus("Zoom in to your block to see each side of the street.");
+    if ($("notice").hidden) setStatus("Zoom in to your block to see each side of the street.");
     return;
   }
   const keys = tileKeysAround(map.getBounds());
@@ -135,7 +138,7 @@ async function redraw() {
       sideLayer.removeLayer(layer);
       state.layers.delete(id);
     }
-  setStatus("Tap the line on your side of the street.");
+  if ($("notice").hidden) setStatus("Tap the line on your side of the street.");
 }
 
 // ---- panel -----------------------------------------------------------------
@@ -229,8 +232,14 @@ async function nearbyFrom(lat, lon, label) {
   await loadTiles(keys);
   const nearbyList = sidesIn(keys)
     .map((s) => ({ s, d: distanceToSide(pt, s) }))
+    .filter(({ d }) => d <= NEAR_SIDE_M)
     .sort((a, b) => a.d - b.d)
     .slice(0, NEARBY);
+  if (!nearbyList.length) {
+    $("nearby").hidden = true; $("detail").hidden = true; $("intro").hidden = false;
+    return notice("info", "No sweeping schedule found here.",
+      "That doesn't mean parking is unrestricted. Check the posted signs.");
+  }
   const list = $("nearby");
   list.replaceChildren(
     el("p", { class: "nearby-h" }, `Near ${label}`),
@@ -245,31 +254,153 @@ async function nearbyFrom(lat, lon, label) {
   $("intro").hidden = true;
   $("detail").hidden = true;
   list.hidden = false;
-  setStatus(nearbyList.length ? "Pick your side of the street below or on the map." : "No sweeping data near there.");
+  setStatus("Pick your side of the street below or on the map.");
+}
+
+// ---- coverage --------------------------------------------------------------
+
+
+function rings(geom) {
+  return geom.type === "MultiPolygon" ? geom.coordinates.map((p) => p[0]) : [geom.coordinates[0]];
+}
+
+function inRing([x, y], ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function cityArea(c) {
+  if (c.boundary) return c.boundary;
+  const [w, s, e, n] = c.bounds;  // no boundary shipped: fall back to the data's extent
+  return { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] };
+}
+
+// Which covered city a point is in, or the nearest one and how far outside it.
+function locate(pt) {
+  let nearest = null;
+  for (const c of state.cities) {
+    const rs = rings(cityArea(c));
+    if (rs.some((r) => inRing(pt, r))) return { city: c, inside: true, d: 0 };
+    const d = Math.min(...rs.map((r) => distanceToLine(pt, r)));
+    if (!nearest || d < nearest.d) nearest = { city: c, inside: false, d };
+  }
+  return nearest;
+}
+
+function requestURL(place) {
+  const title = place ? `Add ${place}` : "Add my city";
+  const body = `I'd use Sweep Calendar in ${place || "[your city]"}.\n\n` +
+    "(Please don't post your home address here; issues are public.)";
+  return `${REPO}/issues/new?${new URLSearchParams({ title, body, labels: "city-request" })}`;
+}
+
+function cityButtons(prefix = "") {
+  return state.cities.map((c) => el("button", {
+    type: "button", class: "ghost", on: { click: () => goToCity(c.slug) },
+  }, `${prefix}${c.name}`));
+}
+
+// The notice sits between the search box and the map, so it is the first
+// thing seen on a phone. kind: "warn" (outside coverage) or "info".
+function notice(kind, title, text, actions = []) {
+  const n = $("notice");
+  n.className = `notice ${kind}`;
+  n.replaceChildren(
+    el("button", { type: "button", class: "close", "aria-label": "Dismiss", on: { click: clearNotice } }, "×"),
+    el("p", { class: "notice-h" }, title),
+    text ? el("p", {}, text) : "",
+    actions.length ? el("div", { class: "notice-actions" }, ...actions) : "");
+  n.hidden = false;
+  setStatus("");
+}
+
+function clearNotice() { $("notice").hidden = true; }
+
+function coveredList() {
+  const names = state.cities.map((c) => c.name);
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
+
+function placeName(hit) {
+  const a = (hit && hit.address) || {};
+  return a.city || a.town || a.village || a.hamlet || a.suburb || a.county || "";
+}
+
+function showOutside(lat, lon, where, place) {
+  if (pin) pin.remove();
+  pin = L.circleMarker([lat, lon], { radius: 8, color: cssVar("--muted"), fillColor: cssVar("--muted"), fillOpacity: 0.9 }).addTo(map);
+  map.setView([lat, lon], 14);
+  const title = where.d < JUST_OUTSIDE_M
+    ? `${place ? `That's in ${place}, j` : "J"}ust outside ${where.city.name}.`
+    : `${place || "That address"} isn't covered yet.`;
+  notice("warn", title, `Sweep Calendar covers ${coveredList()}.`, [
+    ...cityButtons("Go to "),
+    el("a", { class: "btn ghost", href: requestURL(place), target: "_blank", rel: "noopener" },
+      place ? `Request ${place}` : "Request your city"),
+  ]);
+  $("nearby").hidden = true; $("detail").hidden = true; $("intro").hidden = false;
+}
+
+// Route a found point: into the right city's block sides, or to the notice.
+async function arrive(lat, lon, label, hit) {
+  const where = locate([lon, lat]);
+  if (!where.inside) {
+    // Within a few blocks of the edge, real block sides beat a polygon test.
+    if (where.d < NEAR_SIDE_M && where.city.slug === state.city.slug) return nearbyFrom(lat, lon, label);
+    return showOutside(lat, lon, where, placeName(hit));
+  }
+  if (where.city.slug !== state.city.slug) {
+    await openCity(where.city.slug, { fit: false });
+    notice("info", `Switched to ${where.city.name}.`, "");
+  } else {
+    clearNotice();
+  }
+  await nearbyFrom(lat, lon, label);
 }
 
 // ---- search ----------------------------------------------------------------
 
-async function geocode(q) {
-  const [w, s, e, n] = state.city.bounds;
+let lastCall = 0;
+async function nominatim(params) {
+  // Nominatim's usage policy: at most one request per second.
+  const wait = lastCall + 1100 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastCall = Date.now();
   const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.search = new URLSearchParams({
-    q: `${q}, ${state.city.name}`, format: "jsonv2", limit: "1",
-    viewbox: `${w},${n},${e},${s}`, bounded: "1",
-  });
-  const hits = await getJSON(url);
-  return hits[0];
+  url.search = new URLSearchParams({ format: "jsonv2", limit: "1", addressdetails: "1", countrycodes: "us", ...params });
+  return (await getJSON(url))[0];
+}
+
+// Covered cities first (current one leading), each bounded to its own area so
+// "1000 Valencia St" means San Francisco's; then anywhere in the US, so an
+// address we don't cover is found and named rather than reported missing.
+async function geocode(q) {
+  const order = [state.city, ...state.cities.filter((c) => c.slug !== state.city.slug)];
+  for (const c of order) {
+    const [w, s, e, n] = c.bounds;
+    const hit = await nominatim({ q, viewbox: `${w},${n},${e},${s}`, bounded: "1" });
+    if (hit) return hit;
+  }
+  return nominatim({ q });
 }
 
 $("search").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const q = $("q").value.trim();
   if (!q) return;
+  clearNotice();
   setStatus("Searching…");
   try {
     const hit = await geocode(q);
-    if (!hit) return setStatus(`Couldn't find “${q}” in ${state.city.name}.`);
-    await nearbyFrom(+hit.lat, +hit.lon, q);
+    if (!hit) {
+      return notice("info", `Couldn't find “${q}”.`,
+        "Try a street number and name, like 1000 Valencia St, or zoom the map to your block.");
+    }
+    await arrive(+hit.lat, +hit.lon, q, hit);
   } catch (err) {
     setStatus("Search is unavailable right now. Zoom the map to your block instead.");
   }
@@ -279,34 +410,65 @@ $("locate").addEventListener("click", () => {
   if (!navigator.geolocation) return setStatus("Location isn't available in this browser.");
   setStatus("Finding you…");
   navigator.geolocation.getCurrentPosition(
-    (p) => nearbyFrom(p.coords.latitude, p.coords.longitude, "you"),
+    (p) => arrive(p.coords.latitude, p.coords.longitude, "you"),
     () => setStatus("Couldn't get your location."),
     { enableHighAccuracy: true, timeout: 10000 });
 });
 
 map.on("moveend", redraw);
 
-// ---- boot ------------------------------------------------------------------
+// ---- cities ------------------------------------------------------------------
 
-async function openCity(slug) {
-  state.city = await getJSON(`${slug}/meta.json`, { cache: "no-cache" });
-  state.tiles.clear(); state.pending.clear(); state.layers.clear(); sideLayer.clearLayers();
-  const [w, s, e, n] = state.city.bounds;
-  map.fitBounds([[s, w], [n, e]]);
+const outlineLayer = L.layerGroup().addTo(map);
+
+function drawOutlines() {
+  outlineLayer.clearLayers();
+  for (const c of state.cities) {
+    if (!c.boundary) continue;
+    L.geoJSON(c.boundary, {
+      interactive: false,
+      style: { color: cssVar("--accent"), weight: 2.5, opacity: 0.85, dashArray: "8 6",
+               fillColor: cssVar("--accent"), fillOpacity: 0.05 },
+    }).addTo(outlineLayer);
+  }
+}
+
+function renderPicker() {
+  $("cities").replaceChildren(
+    ...state.cities.map((c) => el("button", {
+      type: "button", class: "city", "aria-pressed": String(c.slug === state.city.slug),
+      on: { click: () => goToCity(c.slug) },
+    }, c.name)),
+    el("a", { class: "city add", href: requestURL(""), target: "_blank", rel: "noopener" }, "+ Request a city"));
+}
+
+async function goToCity(slug) {
+  clearNotice();
+  if (pin) { pin.remove(); pin = null; }
+  await openCity(slug);
+}
+
+async function openCity(slug, { fit = true } = {}) {
+  if (!state.city || state.city.slug !== slug) {
+    state.city = await getJSON(`${slug}/meta.json`, { cache: "no-cache" });
+    state.tiles.clear(); state.pending.clear(); state.layers.clear(); sideLayer.clearLayers();
+    state.selected = null;
+  }
+  renderPicker();
+  if (fit) {
+    const [w, s, e, n] = state.city.bounds;
+    map.fitBounds([[s, w], [n, e]]);
+  }
   $("source").replaceChildren("Data: ",
     el("a", { href: state.city.source, rel: "noopener" }, `${state.city.name} open data`),
     `. Built ${new Date(state.city.built).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`);
 }
 
 (async function boot() {
-  const cities = await getJSON("cities.json", { cache: "no-cache" });
-  const pick = $("city");
-  pick.replaceChildren(...cities.map((c) => el("option", { value: c.slug }, c.name)));
-  pick.hidden = cities.length < 2;
+  state.cities = await getJSON("cities.json", { cache: "no-cache" });
+  drawOutlines();
   const [slug, tile, sideId] = location.hash.slice(1).split("/");
-  await openCity(cities.some((c) => c.slug === slug) ? slug : cities[0].slug);
-  pick.value = state.city.slug;
-  pick.addEventListener("change", () => openCity(pick.value));
+  await openCity(state.cities.some((c) => c.slug === slug) ? slug : state.cities[0].slug);
   if (sideId && state.city.tiles.includes(tile)) {
     await loadTiles([tile]);  // deep link: #<city>/<tile>/<side>
     const s = state.tiles.get(tile).find((x) => x.parts.some((p) => p.id === sideId));

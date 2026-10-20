@@ -127,7 +127,11 @@ def main(argv=None) -> None:
     for slug in args.cities:
         meta = build_city(CITIES[slug], args.out, args.days, args.cache)
         print(f"{slug}: {meta['blockSides']} block sides, {len(meta['tiles'])} tiles")
-        built.append({k: meta[k] for k in ("slug", "name", "bounds")})
+        city = CITIES[slug]
+        entry = {k: meta[k] for k in ("slug", "name", "bounds")}
+        if city.boundary:
+            entry["boundary"] = json.loads(city.boundary.read_text())["geometry"]
+        built.append(entry)
     (args.out / "cities.json").write_text(json.dumps(built, indent=1))
     shutil.copytree(WEB, args.out, dirs_exist_ok=True)
     # Version the front end's own assets so a deploy never pairs new data with

@@ -6,6 +6,7 @@ Every city adapter turns its own data into these types; everything downstream
 from dataclasses import dataclass, field
 from datetime import date, time
 from enum import Enum
+from pathlib import Path
 from typing import Callable, Dict, FrozenSet, List, Optional, Tuple
 
 
@@ -60,3 +61,6 @@ class City:
     # Streets too minor to end a block ("Imperial Aly"); pieces split by one
     # with identical schedules are presented as one block side.
     minor_street: Callable[[str], bool] = lambda name: False
+    # GeoJSON Feature of the city limits (simplified), used to draw coverage
+    # and to tell "in this city" from "outside coverage" after geocoding.
+    boundary: Optional[Path] = None

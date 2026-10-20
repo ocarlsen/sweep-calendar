@@ -18,19 +18,20 @@
       <p class="tag">Street sweeping, in the calendar you already check.</p>
     </div>
   </div>
-  <select id="city" aria-label="City"></select>
 </header>
+<nav id="cities" class="cities" aria-label="Covered cities"></nav>
 
 <main>
   <section class="finder">
     <form id="search" class="search" autocomplete="off">
-      <input id="q" type="search" placeholder="Your street address" aria-label="Street address" enterkeyhint="search">
+      <input id="q" type="search" placeholder="Street address, e.g. 1000 Valencia St" aria-label="Street address" enterkeyhint="search">
       <button type="submit">Find</button>
       <button type="button" id="locate" class="ghost" title="Use my location" aria-label="Use my location">
         <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="3.5" fill="currentColor"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/></svg>
       </button>
     </form>
     <p id="status" class="status" role="status"></p>
+    <div id="notice" class="notice" role="alert" hidden></div>
     <div id="map" role="application" aria-label="Map of block sides"></div>
   </section>
 
