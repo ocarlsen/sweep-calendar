@@ -6,6 +6,11 @@ on:
   schedule:
     - cron: "17 11 * * 1"  # Mondays 04:17 Pacific: pick up schedule changes, roll the 1-year window
   workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: "Fail the canary on purpose, to prove the alert path"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -54,6 +59,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m parkcal.canary
+      - if: ${{ inputs.simulate_failure }}
+        run: echo "simulated failure (workflow_dispatch input)" && exit 1
 
   # Any failure above opens (or comments on) one issue, which emails the
   # repo owner. Quiet when everything passes.
