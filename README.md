@@ -11,7 +11,9 @@ handled, and the feed keeps itself current.
 Cities publish sweeping schedules as open data, and apps exist that push
 reminders. What did not exist for San Francisco was the simplest version: a
 plain `webcal://` feed for *your* curb that lives in the calendar you already
-look at, with no app, account, or location tracking.
+look at, with no app, account, or location tracking. (The site counts visits
+and button clicks anonymously with GoatCounter: no cookies, and events carry
+only the action and the city, never a block, address or location.)
 
 ## How it works
 

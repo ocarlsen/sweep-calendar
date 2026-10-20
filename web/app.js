@@ -216,11 +216,20 @@ const HINTS = {
          "calendar, and click Add notification. Outlook: Subscribe, or Copy calendar URL.",
 };
 
+// Anonymous usage counts (GoatCounter, no cookies). An event names the action
+// and the city, never the block, address or location.
+function track(action) {
+  try {
+    window.goatcounter?.count?.({ path: `${action}/${state.city ? state.city.slug : "none"}`, title: action, event: true });
+  } catch (e) { /* counting must never break the page */ }
+}
+
 function calendarButtons(s, copy) {
-  const google = (cls) => el("a", { class: cls, target: "_blank", rel: "noopener",
+  const google = (cls) => el("a", { class: cls, target: "_blank", rel: "noopener", on: { click: () => track("google-calendar") },
     href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(feedURL(s, "webcal"))}` },
     "Google Calendar");
-  const subscribe = (cls) => el("a", { class: cls, href: feedURL(s, "webcal") }, "Subscribe in Calendar");
+  const subscribe = (cls) => el("a", { class: cls, href: feedURL(s, "webcal"), on: { click: () => track("subscribe") } },
+    "Subscribe in Calendar");
   switch (platform()) {
     case "apple": return [subscribe("btn"), el("div", { class: "row" }, google("btn ghost"), copy)];
     case "android": return [google("btn"), copy];
@@ -231,8 +240,9 @@ function calendarButtons(s, copy) {
 // A ghost button that copies text and briefly says so. Clipboard access is
 // missing on plain http and refused in some in-app browsers; then the URL is
 // shown in a selected text box so it can still be copied by hand.
-function copyButton(label, text) {
+function copyButton(label, text, event) {
   const b = el("button", { type: "button", class: "ghost", "aria-live": "polite", on: { click: async () => {
+    if (event) track(event);
     try {
       await navigator.clipboard.writeText(text());
       b.textContent = "Copied";
@@ -258,10 +268,11 @@ function manualCopy(after, value) {
 
 // "Share this block": the phone's share sheet where there is one, else copy.
 function shareButton(s) {
-  if (!navigator.share) return copyButton("Copy page link", () => blockLink(s));
-  return el("button", { type: "button", class: "ghost", on: { click: () =>
-    navigator.share({ title: `${s.street} street sweeping`, url: blockLink(s) }).catch(() => {}) } },
-    "Share this block");
+  if (!navigator.share) return copyButton("Copy page link", () => blockLink(s), "share");
+  return el("button", { type: "button", class: "ghost", on: { click: () => {
+    track("share");
+    navigator.share({ title: `${s.street} street sweeping`, url: blockLink(s) }).catch(() => {});
+  } } }, "Share this block");
 }
 
 // LinkedIn, X, Facebook and Instagram open links in their own browser, which
@@ -282,7 +293,7 @@ function section(title, lines) {
 
 function showDetail(s) {
   const d = $("detail");
-  const copy = copyButton("Copy calendar URL", () => feedURL(s, "https"));
+  const copy = copyButton("Copy calendar URL", () => feedURL(s, "https"), "copy-calendar-url");
   const share = shareButton(s);
   d.replaceChildren(
     $("nearby").childElementCount ? el("button", { type: "button", class: "back", on: { click: showNearby } }, "‹ Nearby block sides") : "",
@@ -309,7 +320,8 @@ function showDetail(s) {
     ]),
     el("p", { class: "hint" },
       "Sign says something different? ",
-      el("a", { href: problemURL(s), target: "_blank", rel: "noopener" }, "Report a problem")),
+      el("a", { href: problemURL(s), target: "_blank", rel: "noopener", on: { click: () => track("report-problem") } },
+        "Report a problem")),
   );
   $("intro").hidden = true;
   $("nearby").hidden = true;
@@ -476,7 +488,8 @@ function showOutside(lat, lon, where, place, hit) {
     : `${place || "That address"} isn't covered yet.`;
   notice("warn", title, `Sweep Calendar covers ${coveredList()}.`, [
     ...cityButtons("Go to "),
-    el("a", { class: "btn ghost", href: requestURL(place), target: "_blank", rel: "noopener" },
+    el("a", { class: "btn ghost", href: requestURL(place), target: "_blank", rel: "noopener",
+              on: { click: () => track("request-city") } },
       place ? `Request ${place}` : "Request your city"),
   ]);
   $("nearby").hidden = true; $("detail").hidden = true; $("intro").hidden = false;
@@ -485,6 +498,7 @@ function showOutside(lat, lon, where, place, hit) {
 // Route a found point: into the right city's block sides, or to the notice.
 async function arrive(lat, lon, label, hit, { quiet = false } = {}) {
   const where = locate([lon, lat]);
+  if (!quiet) track(where.inside ? "search-covered" : "search-outside");
   if (quiet && !where.inside) return;  // auto-locate: never greet a visitor with "not covered"
   if (!where.inside) {
     // Within a few blocks of the edge, real block sides beat a polygon test.
@@ -578,6 +592,7 @@ const REQUEST = "__request__";
 function renderPicker() {
   const pick = el("select", { id: "city", "aria-label": "City", on: { change: () => {
     if (pick.value === REQUEST) {
+      track("request-city");
       window.open(requestURL(""), "_blank", "noopener");
       pick.value = state.city.slug;
     } else {
