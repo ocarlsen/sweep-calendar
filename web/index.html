@@ -59,6 +59,15 @@
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="app.js"></script>
-<script data-goatcounter="https://sweepcalendar.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+<script>
+  // Count only the real site: previews (localhost, the Tailscale address) would pollute the numbers.
+  if (location.hostname === "parking.ocarlsen.com") {
+    const gc = document.createElement("script");
+    gc.async = true;
+    gc.src = "https://gc.zgo.at/count.js";
+    gc.dataset.goatcounter = "https://sweepcalendar.goatcounter.com/count";
+    document.head.appendChild(gc);
+  }
+</script>
 </body>
 </html>
