@@ -354,8 +354,9 @@ function showOutside(lat, lon, where, place) {
 }
 
 // Route a found point: into the right city's block sides, or to the notice.
-async function arrive(lat, lon, label, hit) {
+async function arrive(lat, lon, label, hit, { quiet = false } = {}) {
   const where = locate([lon, lat]);
+  if (quiet && !where.inside) return;  // auto-locate: never greet a visitor with "not covered"
   if (!where.inside) {
     // Within a few blocks of the edge, real block sides beat a polygon test.
     if (where.d < NEAR_SIDE_M && where.city.slug === state.city.slug) return nearbyFrom(lat, lon, label);
@@ -363,7 +364,7 @@ async function arrive(lat, lon, label, hit) {
   }
   if (where.city.slug !== state.city.slug) {
     await openCity(where.city.slug, { fit: false });
-    notice("info", `Switched to ${where.city.name}.`, "");
+    if (!quiet) notice("info", `Switched to ${where.city.name}.`, "");
   } else {
     clearNotice();
   }
@@ -480,6 +481,17 @@ async function openCity(slug, { fit = true } = {}) {
   if (sideId && state.city.tiles.includes(tile)) {
     await loadTiles([tile]);  // deep link: #<city>/<tile>/<side>
     const s = state.tiles.get(tile).find((x) => x.parts.some((p) => p.id === sideId));
-    if (s) select(s, { fly: true });
+    if (s) return select(s, { fly: true });
   }
+  autoLocate();
 })();
+
+// Start where the visitor is. The browser asks permission once; a refusal,
+// a timeout, or a location outside every covered city leaves the city view.
+function autoLocate() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => { if (!pin && $("q").value === "") arrive(p.coords.latitude, p.coords.longitude, "you", null, { quiet: true }); },
+    () => {},
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 10 * 60 * 1000 });
+}
