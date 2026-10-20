@@ -478,7 +478,8 @@ function renderPicker() {
     ...state.cities.map((c) => el("option", { value: c.slug }, c.name)),
     el("option", { value: REQUEST }, "Request a city…"));
   pick.value = state.city.slug;
-  $("cities").replaceChildren(el("label", { for: "city", class: "city-label" }, "Sweeping schedules for"), pick);
+  $("cities").replaceChildren(el("label", { for: "city", class: "city-label" }, "Sweeping schedules for"),
+    el("span", { class: "select-wrap" }, pick));
 }
 
 async function goToCity(slug) {

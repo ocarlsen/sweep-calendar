@@ -64,9 +64,18 @@ h1 { font-size: 1.2rem; letter-spacing: -.01em; }
   max-width: 1200px; margin: 0 auto 12px; padding: 0 16px;
 }
 .city-label { color: var(--muted); font-size: .9rem; }
+/* The native select arrow sits hard against the edge and can't be moved, so
+   hide it and draw a chevron inset from the right that follows the theme. */
+.select-wrap { position: relative; display: inline-block; }
+.select-wrap::after {
+  content: ""; position: absolute; right: 16px; top: calc(50% - 6px);
+  width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); pointer-events: none;
+}
 #city {
+  appearance: none; -webkit-appearance: none;
   font: inherit; font-weight: 600; color: var(--ink); background: var(--surface);
-  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 40px 6px 12px; cursor: pointer;
 }
 .hint a { color: inherit; }
 
