@@ -136,8 +136,10 @@ def calendar(side: BlockSide, city: City, first: date, last: date,
             f"LOCATION:{escape(where)}",
             f"DESCRIPTION:{escape(f'Posted signs control.{note} Source: {city.source_url}')}",
             "TRANSP:TRANSPARENT",
-            # Long-form duration: same meaning as -PT12H, and reportedly the
-            # only form Google Calendar honors in subscribed feeds.
+            # 12 hours before. Apple Calendar honors it (unless the subscriber
+            # leaves Remove Alerts on); Google Calendar ignores reminders in
+            # subscribed feeds in any form (tested 2026-10-20), so the site
+            # tells Google users to add a notification to the calendar itself.
             "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-P0DT12H0M0S",
             f"DESCRIPTION:{escape(f'Move your car: sweeping {hours}')}",
             "END:VALARM",

@@ -205,10 +205,10 @@ function platform() {
 const HINTS = {
   apple: "Subscribe opens Calendar. iOS hides alerts on subscribed calendars by default; turn off " +
          "Remove Alerts in the subscription's settings to get a reminder the day before.",
-  android: "Google Calendar adds it to your Google account, so it shows up on this phone. " +
-           "For other calendar apps, tap Copy calendar URL, then add a calendar from a URL.",
-  other: "Google Calendar adds it to your Google account. Outlook: Subscribe opens it if it's " +
-         "installed, or Copy calendar URL and add a calendar from the internet.",
+  android: "Adds it to your Google account and this phone. For a reminder, open Google Calendar " +
+           "settings, pick this calendar, and tap Add notification. Other apps: Copy calendar URL.",
+  other: "Adds it to your Google account. For a reminder, open Google Calendar settings, pick this " +
+         "calendar, and click Add notification. Outlook: Subscribe, or Copy calendar URL.",
 };
 
 function calendarButtons(s, copy) {
