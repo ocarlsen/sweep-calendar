@@ -8,8 +8,9 @@ Prints one line, e.g.
   🧹 Sweep Calendar (yesterday): 14 visits (linkedin.com 9, x.com 3) · 4 calendar adds · 1 city request
 and prints NOTHING on a day with no visits and no events, so the brief stays
 silent when there is nothing to say. Exits non-zero, with the reason on
-stderr, when the token is missing or the API fails: a broken feed of numbers
-must not look like a quiet day.
+stderr, when the token is missing or the visit counts can't be fetched: a
+broken feed of numbers must not look like a quiet day. A referrers failure
+alone keeps the line and says the referrers are unavailable.
 
 Token: ~/.config/sweep-calendar/goatcounter-token (read-only "Read
 statistics" token for sweepcalendar.goatcounter.com), or GOATCOUNTER_TOKEN_FILE.
@@ -75,11 +76,19 @@ def collect(days: int, today: date) -> dict:
         if h.get("event"):
             action = h["path"].lstrip("/").split("/")[0]
             events[action] = events.get(action, 0) + h["count"]
-    refs = api("stats/toprefs", limit=3, **span).get("stats") or []
+    # Referrers are garnish on the visit count: if that endpoint fails, still report the
+    # numbers, and say in the line that the referrers are missing (a bare count would read as
+    # "no referrers"). PDR-22: one 404 from stats/toprefs blanked the whole brief section.
+    try:
+        refs = api("stats/toprefs", limit=3, **span).get("stats") or []
+        referrers_error = None
+    except StatsError as e:
+        refs, referrers_error = [], str(e).removeprefix("stats: ")
     return {
         "days": days,
         "visits": pages,
         "referrers": [(r.get("name") or "direct", r.get("count", 0)) for r in refs if r.get("count")],
+        "referrers_error": referrers_error,
         "events": events,
     }
 
@@ -91,8 +100,13 @@ def line(s: dict) -> str:
     def plural(n: int, one: str, many: str = None) -> str:
         return f"{n} {one if n == 1 else (many or one + 's')}"
 
-    parts = [plural(s["visits"], "visit")
-             + (f" ({', '.join(f'{n} {c}' for n, c in s['referrers'])})" if s["referrers"] else "")]
+    if s.get("referrers_error"):
+        refs = f" (referrers unavailable: {s['referrers_error']})"
+    elif s["referrers"]:
+        refs = f" ({', '.join(f'{n} {c}' for n, c in s['referrers'])})"
+    else:
+        refs = ""
+    parts = [plural(s["visits"], "visit") + refs]
     if calendar:
         parts.append(plural(calendar, "calendar add"))
     for action, one, many in (("request-city", "city request", None),
