@@ -39,6 +39,28 @@ class Collect(unittest.TestCase):
         self.assertEqual(calls[0][1]["start"], "2026-10-20T00:00:00-07:00")
         self.assertEqual(calls[0][1]["end"], "2026-10-20T23:59:59-07:00")
 
+    def test_referrers_failure_keeps_the_counts(self):
+        def fake_api(path, **params):
+            if path == "stats/toprefs":
+                raise stats.StatsError("stats: GoatCounter API stats/toprefs returned HTTP 404")
+            return {"hits": [{"path": "/index.html", "count": 5, "event": False},
+                             {"path": "subscribe/sf", "count": 1, "event": True}]}
+
+        with mock.patch.object(stats, "api", fake_api):
+            s = stats.collect(1, date(2026, 11, 2))
+        self.assertEqual((s["visits"], s["events"], s["referrers"]), (5, {"subscribe": 1}, []))
+        self.assertEqual(stats.line(s),
+                         "🧹 Sweep Calendar (yesterday): 5 visits (referrers unavailable: GoatCounter API"
+                         " stats/toprefs returned HTTP 404) · 1 calendar add · https://sweepcalendar.goatcounter.com")
+
+    def test_hits_failure_still_fails_loudly(self):
+        def fake_api(path, **params):
+            raise stats.StatsError("stats: GoatCounter API stats/hits returned HTTP 500")
+
+        with mock.patch.object(stats, "api", fake_api):
+            with self.assertRaises(stats.StatsError):
+                stats.collect(1, date(2026, 11, 2))
+
     def test_missing_token_fails_loudly(self):
         with mock.patch.object(stats, "TOKEN_FILE", stats.Path("/nonexistent/token")):
             with self.assertRaises(stats.StatsError) as e:
