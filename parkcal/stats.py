@@ -19,15 +19,20 @@ import argparse
 import json
 import os
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time as dtime, timedelta
 from pathlib import Path
 from typing import Dict, List
 from zoneinfo import ZoneInfo
 
 API = "https://sweepcalendar.goatcounter.com/api/v0"
 DASHBOARD = "https://sweepcalendar.goatcounter.com"
+# GoatCounter has returned sporadic 404s (and other transient failures) that succeed on
+# re-run minutes later (PDR-65). Retry before giving up.
+RETRY_DELAYS = (2, 5)  # seconds before the 2nd and 3rd tries
 TZ = ZoneInfo("America/Los_Angeles")
 TOKEN_FILE = Path(os.environ.get("GOATCOUNTER_TOKEN_FILE",
                                  Path.home() / ".config" / "sweep-calendar" / "goatcounter-token"))
@@ -52,18 +57,25 @@ def token() -> str:
 def api(path: str, **params) -> dict:
     req = urllib.request.Request(f"{API}/{path}?{urllib.parse.urlencode(params)}",
                                  headers={"Authorization": f"Bearer {token()}"})
-    try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.load(r)
-    except urllib.error.HTTPError as e:
-        raise StatsError(f"stats: GoatCounter API {path} returned HTTP {e.code}")
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise StatsError(f"stats: GoatCounter API {path} unreachable: {e}")
+    for attempt in range(len(RETRY_DELAYS) + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            err = StatsError(f"stats: GoatCounter API {path} returned HTTP {e.code}")
+            if e.code not in (404, 429) and e.code < 500:
+                raise err
+        except (urllib.error.URLError, TimeoutError) as e:
+            err = StatsError(f"stats: GoatCounter API {path} unreachable: {e}")
+        if attempt < len(RETRY_DELAYS):
+            time.sleep(RETRY_DELAYS[attempt])
+    else:
+        raise err
 
 
 def window(days: int, today: date) -> Dict[str, str]:
-    start = datetime.combine(today - timedelta(days=days), time(0), TZ)
-    end = datetime.combine(today, time(0), TZ) - timedelta(seconds=1)
+    start = datetime.combine(today - timedelta(days=days), dtime(0), TZ)
+    end = datetime.combine(today, dtime(0), TZ) - timedelta(seconds=1)
     return {"start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds")}
 
 
