@@ -62,14 +62,15 @@ def api(path: str, **params) -> dict:
             with urllib.request.urlopen(req, timeout=30) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if e.code not in (404, 429) and e.code < 500:
-                raise StatsError(f"stats: GoatCounter API {path} returned HTTP {e.code}")
             err = StatsError(f"stats: GoatCounter API {path} returned HTTP {e.code}")
+            if e.code not in (404, 429) and e.code < 500:
+                raise err
         except (urllib.error.URLError, TimeoutError) as e:
             err = StatsError(f"stats: GoatCounter API {path} unreachable: {e}")
         if attempt < len(RETRY_DELAYS):
             time.sleep(RETRY_DELAYS[attempt])
-    raise err
+    else:
+        raise err
 
 
 def window(days: int, today: date) -> Dict[str, str]:

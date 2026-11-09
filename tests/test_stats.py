@@ -104,6 +104,24 @@ class Api(unittest.TestCase):
         self.assertTrue(str(cm.exception).startswith("stats: GoatCounter API stats/hits unreachable:"))
         self.assertEqual(m_open.call_count, 3)
 
+    def test_retries_429_5xx_and_timeouts_and_reports_the_last_error(self):
+        http = lambda code: stats.urllib.error.HTTPError("url", code, "msg", hdrs=None, fp=None)
+        with mock.patch.object(stats.urllib.request, "urlopen",
+                               side_effect=[http(429), TimeoutError("slow"), http(500)]) as m_open, \
+             mock.patch("time.sleep") as m_sleep:
+            with self.assertRaises(stats.StatsError) as cm:
+                stats.api("stats/hits")
+        self.assertEqual(str(cm.exception), "stats: GoatCounter API stats/hits returned HTTP 500")
+        self.assertEqual(m_open.call_count, 3)
+        self.assertEqual([c.args for c in m_sleep.call_args_list], [(2,), (5,)])
+
+    def test_retries_500_then_succeeds(self):
+        err = stats.urllib.error.HTTPError("url", 500, "msg", hdrs=None, fp=None)
+        with mock.patch.object(stats.urllib.request, "urlopen",
+                               side_effect=[err, io.BytesIO(b'{"stats": []}')]), \
+             mock.patch("time.sleep"):
+            self.assertEqual(stats.api("stats/toprefs"), {"stats": []})
+
     def test_non_retryable_401_raises_immediately(self):
         err = stats.urllib.error.HTTPError("url", 401, "msg", hdrs=None, fp=None)
         with mock.patch.object(stats.urllib.request, "urlopen", side_effect=[err]) as m_open, \
