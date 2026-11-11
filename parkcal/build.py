@@ -18,6 +18,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List
+from zoneinfo import ZoneInfo
 
 from . import ics
 from .cities import CITIES
@@ -148,6 +149,10 @@ def check_sanity(city: City, sides: List[BlockSide]) -> None:
     no_rules = [s.id for s in sides if not s.rules and not s.notes]  # note-only curbs are deliberate
     if no_rules:
         problems.append(f"{len(no_rules)} block sides with no schedule, e.g. {no_rules[:3]}")
+    no_weeks = [s.id for s in sides if any(not r.holiday_only and not r.weeks for r in s.rules)]
+    if no_weeks:
+        problems.append(f"{len(no_weeks)} block sides with a weekday rule that has no weeks "
+                        f"(its feed would have no events), e.g. {no_weeks[:3]}")
     no_line = sum(1 for s in sides if not s.line)
     if sides and no_line / len(sides) > MAX_MISSING_LINE:
         problems.append(f"{no_line}/{len(sides)} block sides without geometry "
@@ -156,7 +161,7 @@ def check_sanity(city: City, sides: List[BlockSide]) -> None:
         raise DataError(f"{city.slug}: refusing to publish:\n  " + "\n  ".join(problems))
 
 
-def build_city(city: City, out: Path, days: int, cache: Path = None) -> dict:
+def build_city(city: City, out: Path, days: int, cache: Path = None, now: datetime = None) -> dict:
     sides = join_split_blocks(
         city.load(cache / f"{city.slug}.json" if cache else None), city.minor_street)
     check_sanity(city, sides)
@@ -166,7 +171,8 @@ def build_city(city: City, out: Path, days: int, cache: Path = None) -> dict:
         shutil.rmtree(root)
     (root / "feeds").mkdir(parents=True)
     (root / "tiles").mkdir()
-    today = datetime.now(timezone.utc).astimezone().date()
+    # The city's calendar date, not the host's (CI runs in UTC).
+    today = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo(city.tz)).date()
     last = today + timedelta(days=days)
     holidays = holiday_table(city, today, last)
     stamp = datetime.now(timezone.utc).replace(microsecond=0)
@@ -208,11 +214,17 @@ def build_city(city: City, out: Path, days: int, cache: Path = None) -> dict:
 
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cities", nargs="*", default=sorted(CITIES))
+    # Checked by hand: argparse tests a nargs="*" default against choices as
+    # one value, so choices= would reject running with no cities at all.
+    ap.add_argument("cities", nargs="*", default=sorted(CITIES),
+                    help="one or more of: " + ", ".join(sorted(CITIES)))
     ap.add_argument("--out", type=Path, default=Path("site"))
     ap.add_argument("--days", type=int, default=365)
     ap.add_argument("--cache", type=Path, help="reuse/save raw city data here")
     args = ap.parse_args(argv)
+    unknown = [c for c in args.cities if c not in CITIES]
+    if unknown:
+        ap.error(f"unknown cities {unknown}, choose from {sorted(CITIES)}")
 
     built = []
     for slug in args.cities:

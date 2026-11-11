@@ -5,6 +5,7 @@ failed a deploy). One slow response shouldn't block a build, but a source
 that stays down should still fail it, so: a few tries with backoff, then
 raise the last error.
 """
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -14,13 +15,20 @@ BACKOFF_S = (5, 15, 45)  # waits between attempts
 USER_AGENT = "sweep-calendar (parking.ocarlsen.com)"
 
 
+def more_pages(data: dict) -> bool:
+    """ArcGIS paging: True if the server says more features follow. Layers
+    report it at the top level, in "properties", or both, depending on host."""
+    return bool(data.get("exceededTransferLimit")
+                or (data.get("properties") or {}).get("exceededTransferLimit"))
+
+
 def get(url: str, timeout: float = 120, sleep=time.sleep) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     for attempt in range(ATTEMPTS):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 return r.read()
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError) as e:
             # A 4xx won't get better by waiting; anything else might.
             if isinstance(e, urllib.error.HTTPError) and e.code < 500:
                 raise

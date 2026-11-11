@@ -30,7 +30,7 @@ from datetime import date, time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..fetch import get
+from ..fetch import get, more_pages
 from ..geometry import curb_for, normal_angle
 from ..model import BlockSide, City, DataError, HolidayKind, Rule
 from .sj import title  # 'SAN PABLO AV' -> 'San Pablo Av'
@@ -50,9 +50,18 @@ def holidays(year: int) -> Dict[date, HolidayKind]:
 def fetch(cache: Optional[Path] = None) -> List[dict]:
     if cache and cache.exists():
         return json.loads(cache.read_text())
-    q = urllib.parse.urlencode(dict(where="1=1", outFields="*", outSR=4326, f="geojson",
-                                    resultRecordCount=5000))
-    feats = json.loads(get(f"{LAYER}/query?{q}"))["features"]
+    feats, offset = [], 0
+    while True:
+        q = urllib.parse.urlencode(dict(where="1=1", outFields="*", outSR=4326, f="geojson",
+                                        orderByFields="OBJECTID", resultOffset=offset,
+                                        resultRecordCount=5000))
+        data = json.loads(get(f"{LAYER}/query?{q}"))
+        page = data["features"]
+        feats += page
+        # A short page can still have more behind it; the server says so.
+        if not page or not more_pages(data):
+            break
+        offset += len(page)
     if cache:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(feats))

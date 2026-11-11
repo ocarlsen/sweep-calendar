@@ -1,9 +1,11 @@
 import json
 import unittest
+from unittest import mock
 from datetime import date, time
 from pathlib import Path
 
 from parkcal.cities import emeryville as E
+from parkcal.cities import emeryville as MOD
 from parkcal.expand import windows
 from parkcal.model import DataError
 
@@ -90,6 +92,21 @@ class RealLayer(unittest.TestCase):
     def test_most_segments_find_their_cross_streets(self):
         with_both = sum(" - " in s.limits for s in SIDES.values())
         self.assertGreater(with_both / len(SIDES), 0.7)
+
+
+
+class Paging(unittest.TestCase):
+    def test_a_short_page_with_more_behind_it_is_followed(self):
+        pages = [{"features": [{"n": 1}, {"n": 2}], "properties": {"exceededTransferLimit": True}},
+                 {"features": [{"n": 3}]}]
+        urls = []
+        def fake_get(url):
+            urls.append(url)
+            return json.dumps(pages[len(urls) - 1]).encode()
+        with mock.patch.object(MOD, "get", fake_get):
+            got = MOD.fetch()
+        self.assertEqual([f["n"] for f in got], [1, 2, 3])
+        self.assertIn("resultOffset=2", urls[1])
 
 
 if __name__ == "__main__":

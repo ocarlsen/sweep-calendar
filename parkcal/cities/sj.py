@@ -31,7 +31,7 @@ from datetime import date, time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from ..fetch import get
+from ..fetch import get, more_pages
 from ..expand import covered
 from ..geometry import curb_for
 from . import sj_major
@@ -58,11 +58,14 @@ def fetch_layer(layer: int) -> List[dict]:
         q = urllib.parse.urlencode(dict(
             where="1=1", outFields="*", outSR=4326, f="geojson", orderByFields="OBJECTID",
             resultOffset=offset, resultRecordCount=PAGE))
-        page = json.loads(get(f"{SERVICE}/{layer}/query?{q}"))["features"]
+        data = json.loads(get(f"{SERVICE}/{layer}/query?{q}"))
+        page = data["features"]
         feats += page
-        if len(page) < PAGE:
+        # A short page can still have more behind it (the server's own cap is
+        # lower than PAGE); it says so with exceededTransferLimit.
+        if not page or not more_pages(data):
             break
-        offset += PAGE
+        offset += len(page)
     return feats
 
 

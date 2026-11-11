@@ -1,8 +1,12 @@
+import tempfile
 import unittest
-from datetime import time
+from unittest import mock
+from datetime import datetime, time, timezone
+from pathlib import Path
 
-from parkcal.build import describe, schedule_lines, schedule_sections
-from parkcal.model import Rule
+from parkcal import build
+from parkcal.build import check_sanity, describe, schedule_lines, schedule_sections
+from parkcal.model import BlockSide, City, DataError, Rule
 
 
 def fri(*weeks):
@@ -55,6 +59,51 @@ class Sections(unittest.TestCase):
         r = Rule(1, frozenset({3}), time(7), time(17), advisory=True)
         self.assertEqual(schedule_sections([r]), {"noParking": [], "sweeping": ["3rd Tue 7am–5pm"]})
 
+
+def tiny_city(rules):
+    side = BlockSide("b1", "Test St", "A - B", "Both sides", [(-122.0, 37.0), (-122.0, 37.001)], rules=rules)
+    return City("t", "Test", "America/Los_Angeles", "https://example.com", lambda y: {}, lambda cache: [side])
+
+
+class Today(unittest.TestCase):
+    def test_today_is_the_cities_date_not_the_hosts(self):
+        # 03:00 UTC on the 12th is still the evening of the 11th in Los Angeles.
+        now = datetime(2026, 11, 12, 3, 0, tzinfo=timezone.utc)
+        rule = Rule(0, frozenset({1, 2, 3, 4, 5}), time(8), time(10))
+        with tempfile.TemporaryDirectory() as d:
+            meta = build.build_city(tiny_city([rule]), Path(d), 30, now=now)
+        self.assertEqual(meta["from"], "2026-11-11")
+
+
+class Sanity(unittest.TestCase):
+    def test_a_weekday_rule_with_no_weeks_is_refused(self):
+        ok = Rule(0, frozenset({1}), time(8), time(10))
+        check_sanity(tiny_city([ok]), [tiny_city([ok]).load(None)[0]])
+        bad = Rule(0, frozenset(), time(8), time(10))
+        city = tiny_city([bad])
+        with self.assertRaises(DataError) as e:
+            check_sanity(city, city.load(None))
+        self.assertIn("no weeks", str(e.exception))
+
+
+class Cli(unittest.TestCase):
+    def test_an_unknown_city_is_an_argparse_error(self):
+        with self.assertRaises(SystemExit) as e:
+            build.main(["nowhere"])
+        self.assertEqual(e.exception.code, 2)
+
+    def test_no_cities_means_all_of_them(self):
+        # The deploy runs the build with no city arguments.
+        class Started(Exception):
+            pass
+
+        def first_city(city, *args, **kwargs):
+            raise Started(city.slug)
+
+        with mock.patch.object(build, "build_city", first_city):
+            with self.assertRaises(Started) as e:
+                build.main(["--out", "unused"])
+        self.assertEqual(str(e.exception), sorted(build.CITIES)[0])
 
 if __name__ == "__main__":
     unittest.main()
