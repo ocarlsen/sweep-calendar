@@ -25,6 +25,12 @@ class Signs(unittest.TestCase):
         self.assertEqual(M.parse_sign("No Parking Tuesday 1am to 6am"), [(1, ALL, time(1), time(6))])
         self.assertEqual(M.parse_sign("No Parking Wednesday 8am-12pm"), [(2, ALL, time(8), time(12))])
 
+    def test_two_windows_on_one_day_both_survive(self):
+        self.assertEqual(M.parse_sign("No Parking 2nd Tuesday 8am-noon; then 1pm-5pm"),
+                         [(1, frozenset({2}), time(8), time(12)), (1, frozenset({2}), time(13), time(17))])
+        self.assertEqual(M.parse_sign("Mondays 8am-10am and 1pm-3pm"),
+                         [(0, ALL, time(8), time(10)), (0, ALL, time(13), time(15))])
+
     def test_non_sweeping_signs_are_skipped(self):
         for clause in ["No Stopping Anytime", "2 Hour Parking", "30min Max Parking Anytime",
                        "Loading Zone Only", "No Parking Anytime", "Trolley Only",

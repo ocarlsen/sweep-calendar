@@ -1,3 +1,4 @@
+import socket
 import unittest
 import urllib.error
 from unittest import mock
@@ -22,6 +23,18 @@ class Retries(unittest.TestCase):
         with mock.patch("urllib.request.urlopen", urlopen):
             self.assertEqual(fetch.get("https://x", sleep=waits.append), b"data")
         self.assertEqual((len(calls), waits), (3, [5, 15]))
+
+    def test_retries_a_bare_socket_timeout(self):
+        # Before Python 3.10, socket.timeout is not TimeoutError.
+        calls, waits = [], []
+        def urlopen(req, timeout):
+            calls.append(1)
+            if len(calls) < 2:
+                raise socket.timeout("timed out")
+            return Ok()
+        with mock.patch("urllib.request.urlopen", urlopen):
+            self.assertEqual(fetch.get("https://x", sleep=waits.append), b"data")
+        self.assertEqual((len(calls), waits), (2, [5]))
 
     def test_gives_up_after_the_last_attempt(self):
         waits = []

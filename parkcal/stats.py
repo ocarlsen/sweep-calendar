@@ -1,4 +1,4 @@
-"""Usage summary from GoatCounter, for Owen's AM brief.
+"""Usage summary from GoatCounter, for a daily usage digest.
 
     python3 -m parkcal.stats            # yesterday (Pacific), one line, or nothing
     python3 -m parkcal.stats --days 7   # the last 7 full days (the weekly brief)
@@ -31,7 +31,7 @@ from zoneinfo import ZoneInfo
 API = "https://sweepcalendar.goatcounter.com/api/v0"
 DASHBOARD = "https://sweepcalendar.goatcounter.com"
 # GoatCounter has returned sporadic 404s (and other transient failures) that succeed on
-# re-run minutes later (PDR-65). Retry before giving up.
+# re-run minutes later. Retry before giving up.
 RETRY_DELAYS = (2, 5)  # seconds before the 2nd and 3rd tries
 TZ = ZoneInfo("America/Los_Angeles")
 TOKEN_FILE = Path(os.environ.get("GOATCOUNTER_TOKEN_FILE",
@@ -90,7 +90,7 @@ def collect(days: int, today: date) -> dict:
             events[action] = events.get(action, 0) + h["count"]
     # Referrers are garnish on the visit count: if that endpoint fails, still report the
     # numbers, and say in the line that the referrers are missing (a bare count would read as
-    # "no referrers"). PDR-22: one 404 from stats/toprefs blanked the whole brief section.
+    # "no referrers"). One 404 from stats/toprefs once blanked the whole usage section.
     try:
         refs = api("stats/toprefs", limit=3, **span).get("stats") or []
         referrers_error = None

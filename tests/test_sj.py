@@ -1,9 +1,11 @@
 import json
 import unittest
+from unittest import mock
 from datetime import date, time
 from pathlib import Path
 
 from parkcal.cities import sj
+from parkcal.cities import sj as MOD
 from parkcal.expand import windows
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sj_sample.json"
@@ -57,6 +59,31 @@ class Schedule(unittest.TestCase):
         days = [w.start.date() for w in windows(side, sj.CITY, date(2026, 11, 1), date(2027, 1, 31))]
         self.assertEqual(days, [date(2026, 11, 26), date(2026, 12, 24), date(2027, 1, 28)])
         self.assertEqual(side.limits, "A St - End of street")
+
+
+class Paging(unittest.TestCase):
+    def test_a_short_page_with_more_behind_it_is_followed(self):
+        pages = [{"features": [{"n": 1}, {"n": 2}], "exceededTransferLimit": True},
+                 {"features": [{"n": 3}]}]
+        urls = []
+        def fake_get(url):
+            urls.append(url)
+            return json.dumps(pages[len(urls) - 1]).encode()
+        with mock.patch.object(MOD, "get", fake_get):
+            got = MOD.fetch_layer(516)
+        self.assertEqual([f["n"] for f in got], [1, 2, 3])
+        self.assertIn("resultOffset=2", urls[1])
+
+    def test_the_flag_inside_properties_counts_too(self):
+        pages = [{"features": [{"n": 1}], "properties": {"exceededTransferLimit": True}},
+                 {"features": [{"n": 2}]}]
+        urls = []
+        def fake_get(url):
+            urls.append(url)
+            return json.dumps(pages[len(urls) - 1]).encode()
+        with mock.patch.object(MOD, "get", fake_get):
+            got = MOD.fetch_layer(516)
+        self.assertEqual([f["n"] for f in got], [1, 2])
 
 
 if __name__ == "__main__":

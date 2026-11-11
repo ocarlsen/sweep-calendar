@@ -60,7 +60,7 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="app.js"></script>
 <script>
-  // Count only the real site: previews (localhost, the Tailscale address) would pollute the numbers.
+  // Count only the real site: previews (localhost or a private network address) would pollute the numbers.
   if (location.hostname === "parking.ocarlsen.com") {
     const gc = document.createElement("script");
     gc.async = true;

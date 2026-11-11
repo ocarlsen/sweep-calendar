@@ -4,7 +4,7 @@ from pathlib import Path
 
 from parkcal import canary
 from parkcal.build import check_sanity
-from parkcal.cities import sf, sj
+from parkcal.cities import sf, sj, sj_major
 from parkcal.model import BlockSide, DataError, HolidayKind, Rule
 
 PAGE = (Path(__file__).parent / "fixtures" / "sfmta_holidays_2026-10-19.html").read_text()
@@ -80,9 +80,18 @@ class UnrecognizedSigns(unittest.TestCase):
         with self.assertRaises(DataError):
             sj.to_blocksides([], [self.row("", "Non-Signed Route", weekday="Tues & Thurs")])
 
-    def test_known_skips_pass(self):
+    def test_non_sweeping_and_overnight_signs_pass(self):
+        # Non-sweeping restrictions are known; an overnight sweeping window parses as a rule.
         sj.to_blocksides([], [self.row("Both Sides: No Stopping Anytime"),
                               self.row("Both Sides: No Parking 2nd and 4th Monday 6pm-8am")])
+        self.assertEqual(sj_major.unrecognized("Both Sides: No Parking 2nd and 4th Monday 6pm-8am"), [])
+
+    def test_a_second_time_window_is_not_silently_dropped(self):
+        text = "Both Sides: No Parking 2nd Tuesday 8am-noon; then 1pm-5pm"
+        self.assertEqual(sj_major.unrecognized(text), [])
+        (side,) = sj.to_blocksides([], [self.row(text)])
+        self.assertEqual([(r.start, r.end) for r in side.rules],
+                         [(time(8), time(12)), (time(13), time(17))])
 
 
 if __name__ == "__main__":

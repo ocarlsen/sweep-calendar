@@ -11,7 +11,7 @@ Two fields describe a segment, per side of the road:
 Posted text mixes sweeping restrictions with unrelated ones ("No Stopping
 Anytime", "2 Hour Parking", "Loading Zone Only", permit exceptions). Only
 clauses shaped like a sweeping window are kept: optional "No Parking", days
-(nth weekdays, weekdays, or "Any Day") and one same-day time range. Anything
+(nth weekdays, weekdays, or "Any Day") and one or more same-day time ranges. Anything
 else yields no rule for that side, and the side gets no calendar rather than
 a guessed one. Overnight windows (6pm-8am) are rules that end the next
 morning; weekend-plus-nightly mixes are skipped on purpose.
@@ -73,13 +73,12 @@ def parse_sign(clause: str) -> Optional[List[Window]]:
     low = clause.lower()
     if not low.strip() or any(w in low for w in NOT_SWEEPING):
         return None
-    m = RANGE.search(low)
-    if not m:
-        return None
-    start, end = parse_clock(m.group(1)), parse_clock(m.group(2))  # end <= start: runs overnight
-    rest = re.sub(r"^\s*no parking\s+|\bfrom\b", " ", low[:m.start()] + " " + low[m.end():])
+    ranges = [(parse_clock(m.group(1)), parse_clock(m.group(2))) for m in RANGE.finditer(low)]
+    if not ranges:
+        return None  # end <= start in a range: runs overnight
+    rest = re.sub(r"^\s*no parking\s+|\bfrom\b|\bthen\b", " ", RANGE.sub(" ", low))
     days = parse_days(rest)
-    return [(d, w, start, end) for d, w in days] if days else None
+    return [(d, w, start, end) for d, w in days for start, end in ranges] if days else None
 
 
 def scheduled(weekday_text: str, window_text: str) -> Dict[str, List[Window]]:
@@ -116,17 +115,13 @@ def posted(text: str) -> Dict[str, List[Window]]:
 
 
 def unrecognized(text: str) -> List[str]:
-    """Posted clauses that are neither a sweeping window, nor a known
-    non-sweeping restriction, nor a shape we skip on purpose (an overnight
-    window). A new phrasing from the city lands here instead of silently
-    leaving a ticketed curb with no calendar."""
+    """Posted clauses that are neither a sweeping window nor a known
+    non-sweeping restriction. A new phrasing from the city lands here instead
+    of silently leaving a ticketed curb with no calendar."""
     out = []
     for clause in split_sides(text).values():
         low = clause.lower()
         if parse_sign(clause) or any(w in low for w in NOT_SWEEPING):
             continue
-        m = RANGE.search(low)
-        if m and parse_clock(m.group(2)) <= parse_clock(m.group(1)) and parse_days(low):
-            continue  # overnight window: known, skipped on purpose
         out.append(clause)
     return out
