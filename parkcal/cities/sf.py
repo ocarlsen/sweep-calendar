@@ -112,8 +112,16 @@ def merge_weeks(rules: List[Rule]) -> List[Rule]:
     for r in rules:
         if r.weeks or r.holiday_only:
             weeks.setdefault((r.weekday, r.start, r.end, r.on_holidays), set()).update(r.weeks)
-    return [Rule(wd, frozenset(w), start, end, on_hol)
+    return [Rule(wd, frozenset(FIVE if w == SPLIT_EVERY_WEEK else w), start, end, on_hol)
             for (wd, start, end, on_hol), w in weeks.items()]
+
+
+# SF lists some every-week schedules as "1st & 3rd" plus "2nd & 4th" rows and
+# no row for a 5th occurrence. The posted sign reads "every Friday" (Greenwich
+# St north side, Webster - Fillmore, checked 2026-11-13), and the sign is what
+# is enforced, so a 1st-4th union means every week.
+FIVE = frozenset(range(1, 6))
+SPLIT_EVERY_WEEK = {1, 2, 3, 4}
 
 
 # Street types that split a block in the centerline data without bounding it.

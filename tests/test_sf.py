@@ -44,6 +44,25 @@ class HolidayCalendar(unittest.TestCase):
         self.assertEqual(sf.holidays(2027)[date(2027, 1, 1)], HolidayKind.FULL)
 
 
+class SplitRows(unittest.TestCase):
+    def rule(self, *weeks, day=4):
+        return Rule(day, frozenset(weeks), time(6), time(8))
+
+    def test_first_third_plus_second_fourth_is_every_week(self):
+        # The sign on Greenwich St (north, Webster - Fillmore) says every Friday;
+        # the data has 1st & 3rd and 2nd & 4th rows and nothing for a 5th.
+        (merged,) = sf.merge_weeks([self.rule(1, 3), self.rule(2, 4)])
+        self.assertEqual(merged.weeks, frozenset({1, 2, 3, 4, 5}))
+        # Oct 30 2026 is October's 5th Friday.
+        self.assertIn(date(2026, 10, 30), sweep_days(side_with(merged), date(2026, 10, 1), date(2026, 10, 31)))
+
+    def test_other_unions_keep_their_weeks(self):
+        (merged,) = sf.merge_weeks([self.rule(1, 3), self.rule(5)])
+        self.assertEqual(merged.weeks, frozenset({1, 3, 5}))
+        (merged,) = sf.merge_weeks([self.rule(2), self.rule(4)])
+        self.assertEqual(merged.weeks, frozenset({2, 4}))
+
+
 class Rules(unittest.TestCase):
     def test_nth_weekday_including_fifth(self):
         # Lower Great Hwy, Lincoln-Irving, west side: "Tue 1st, 3rd, 5th", 1-3pm.
